@@ -1,0 +1,19 @@
+Derived from data/raw/maternal_dataset_csv.csv (md5:0253d2d385dd80d6c9bb82df6b85fcc8)
+via src/data_adapter.py (field mapping) + src/pipeline.apply_eligibility (audit rules).
+
+Row-level exclusion reasons:
+reason
+missing_hb_reading                                                    3951
+eligible                                                              2685
+missing_hb_reading;gestation2_out_of_range                            1958
+non_increasing_gestation                                                80
+missing_hb_reading;non_increasing_gestation                             72
+missing_hb_reading;gestation1_out_of_range                              45
+missing_hb_reading;gestation1_out_of_range;gestation2_out_of_range      10
+hb_visit2_out_of_range                                                   7
+gestation2_out_of_range                                                  5
+hb_visit1_out_of_range                                                   2
+hb_visit1_out_of_range;hb_visit2_out_of_range                            2
+
+total_rows: 8817
+eligible: 2685
