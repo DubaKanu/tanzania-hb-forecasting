@@ -3,7 +3,7 @@
 Capstone project for my Software Engineering degree at ALU.
 Supervisor: Emmanuel Adjei
 
-GitHub repo: PASTE_YOUR_REPO_URL_HERE
+GitHub repo: https://github.com/DubaKanu/tanzania-hb-forecasting
 
 ## What this does
 
