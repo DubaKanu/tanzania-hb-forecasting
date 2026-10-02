@@ -4,6 +4,7 @@ Capstone project for my Software Engineering degree at ALU.
 Supervisor: Emmanuel Adjei
 
 GitHub repo: https://github.com/DubaKanu/tanzania-hb-forecasting
+Video demo:
 
 ## What this does
 
@@ -35,8 +36,7 @@ Random Forest performs best. Full charts and results are in `notebooks/model_not
 
 ## Designs
 
-Four charts are generated from the real data and saved in `notebooks/`: missingness per feature, first-visit vs. second-visit haemoglobin, the gap in weeks between visits, and the model comparison chart above. These stand in for interface mockups since the deliverable here is a prediction model, not an app screen. The API's Swagger page at `/docs` is the closest thing to an interface, it's See Swagger interface; Figure in this repo for the live Swagger interface.
-
+Four charts are generated from the real data and saved in `notebooks/`: missingness per feature, first-visit vs. second-visit haemoglobin, the gap in weeks between visits, and the model comparison chart above. These stand in for interface mockups since the deliverable here is a prediction model, not an app screen. The API's Swagger page at `/docs` is the closest thing to an interface, A screenshot of the Swagger interface is included in this repo, showing a sample request and its returned prediction, this is the closest thing to an interface screenshot for this project.
 ## Deployment plan
 
 Right now: a small local API (`app/main.py`) that takes a woman's first-visit numbers and returns a predicted haemoglobin reading, this is the MVP, just enough to show input going in and a real output coming out. No app, no SMS, no hospital system, that's intentional at this stage. If this continued past the capstone, the next step would be wrapping this same model behind a simple web or mobile form so a health worker could use it directly, deployed somewhere like Render.
