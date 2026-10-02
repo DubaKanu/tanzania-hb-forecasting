@@ -4,7 +4,7 @@ Capstone project for my Software Engineering degree at ALU.
 Supervisor: Emmanuel Adjei
 
 GitHub repo: https://github.com/DubaKanu/tanzania-hb-forecasting
-Video demo:
+Video demo: https://drive.google.com/file/d/1hme7EPQWwJKcGfEDZ_sLhvhIecOXRt67/view?usp=sharing
 
 ## What this does
 
