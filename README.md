@@ -1,105 +1,50 @@
-# Tanzania Antenatal Haemoglobin Forecasting (Initial Demo)
+# Tanzania Antenatal Haemoglobin Forecasting
 
-## Status: run against the real data
-This has been executed end-to-end against the actual Zenodo file
-(`maternal_dataset_csv.csv`, md5 `0253d2d385dd80d6c9bb82df6b85fcc8`, the
-version pinned in the supervisor's guidance). Real results, not placeholders:
+Capstone project for my Software Engineering degree at ALU.
+Supervisor: Emmanuel Adjei
 
-- **Eligible cohort:** 2,685 women — matches the supervisor's audited figure exactly.
-- **Stage 1 training CV MAE (g/dL):** random_forest 0.760 < ridge 0.802 < carry_forward 0.879 < median 1.134
-- **Development-set MAE (g/dL):** random_forest 0.793 < ridge 0.807 < carry_forward 0.926 < median 1.080
-- Full output, including the four generated charts, is embedded in `notebooks/model_notebook.ipynb`.
-- The reserved test set (n=399) has **not** been touched, per the frozen protocol; that happens once, in Week 7.
-- A trained Stage 1 model is saved at `models/stage1_model.joblib` and served by the demo API.
+GitHub repo: PASTE_YOUR_REPO_URL_HERE
 
-## Description
-A two-stage machine learning pipeline that (1) forecasts a pregnant woman's
-next antenatal haemoglobin reading from her first-contact data, and (2)
-estimates how reliable that individual forecast is, so a forecast can be
-flagged for direct re-measurement rather than trusted blindly. This is the
-initial-demo checkpoint of the ALU Software Engineering capstone
-*"Predicting Follow-up Haemoglobin and Identifying Unreliable Predictions in
-a Tanzanian Antenatal Cohort"* (Supervisor: Emmanuel Adjei).
+## What this does
 
-This is a **retrospective research demonstration**, not a clinical tool. It
-does not replace blood testing and does not assess referral effectiveness.
+Predicts a pregnant woman's haemoglobin level at her next antenatal visit, using her first-visit data (age, pregnancy history, blood pressure, pulse, and so on). A second model flags how reliable each prediction is, so a low-confidence one can be flagged for a repeat blood test instead of being trusted blindly.
 
-## Repository link
-`[paste your GitHub repo URL here after you push]`
+This is a research demo, not a medical tool. It doesn't replace blood testing.
 
-## About the prepared-data folder name
-The supervisor's guidance names a folder, `Josephine_African_Data_Review/
-Tanzania_Followup_Haemoglobin`, holding `model_ready.csv`, `train.csv`,
-`validation.csv`, and `test.csv`. Those files did not exist anywhere public;
-they are the supervisor's own already-processed version of this same raw
-Zenodo file. This repo builds an independent version of that exact folder
-under `data/Josephine_African_Data_Review/Tanzania_Followup_Haemoglobin/`,
-derived from the raw file via `src/data_adapter.py` (field mapping) and
-`src/pipeline.py` (eligibility rules) — and its eligible count (2,685)
-matches the supervisor's own figure exactly. If the supervisor shares his
-exact files directly, drop them into that same folder; either version is
-usable, but using his exact split lets you reproduce his own preliminary
-numbers precisely, which is worth doing as a cross-check.
+## Data
 
-## What's in this repo
-```
-src/data_adapter.py       Maps the raw 683-column Zenodo export onto the model's 10-feature contract
-src/pipeline.py           Core pipeline: eligibility rules, fixed split, Stage 1 models, metrics
-notebooks/model_notebook.ipynb   Data viz, model architecture, initial performance metrics (already run)
-app/main.py               FastAPI demo (Swagger UI) serving the real trained Stage 1 model
-models/stage1_model.joblib  The trained, frozen Stage 1 model (random forest)
-tests/test_pipeline.py    Unit tests for the pipeline logic (5 tests, all passing)
-data/raw/                       Place maternal_dataset_csv.csv here (not committed to git, 15 MB)
-data/Josephine_African_Data_Review/Tanzania_Followup_Haemoglobin/
-                                 Derived model_ready.csv / train.csv / validation.csv / test.csv
-                                 + exclusion_log.txt (the audit trail)
-requirements.txt
-deployment_plan.md
-```
+Real data from the Tanzania Maternal Health Risks Stratification dataset (Zenodo, DOI 10.5281/zenodo.15309733). After cleaning and keeping only women with two recorded visits, 2,685 women are used.
 
-## How to set up the environment and run the project
+## Results so far
 
-1. **Clone and install dependencies**
-   ```bash
-   git clone <your-repo-url>
-   cd <repo-folder>
-   python3 -m venv venv && source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+| Model | Error (g/dL) |
+|---|---|
+| Random Forest | 0.793 |
+| Ridge regression | 0.807 |
+| Carry previous reading forward | 0.926 |
+| Just guess the average | 1.080 |
 
-2. **Get the data.** Download the pinned Tanzania MHRS release (Zenodo DOI
-   `10.5281/zenodo.15309733`), file `maternal_dataset_csv.csv`, and place it
-   in `data/raw/`. Verify its MD5 checksum matches
-   `0253d2d385dd80d6c9bb82df6b85fcc8` before use.
+Random Forest performs best. Full charts and results are in `notebooks/model_notebook.ipynb`.
 
-3. **Run the tests** (sanity-checks the pipeline code itself, not the real results):
-   ```bash
-   pytest tests/ -v
-   ```
+## How to run it
 
-4. **Run the notebook** to regenerate the derived data, the visualizations, the
-   Stage 1 model comparison, and the metrics table:
-   ```bash
-   jupyter notebook notebooks/model_notebook.ipynb
-   ```
-   Run all cells top to bottom. With the fixed seed (42), this reproduces the
-   same 2,685-row cohort and the same splits reported above. **Do not open
-   the reserved test partition again until the final Week 7 evaluation.**
-
-5. **Run the demo API**:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-   Open `http://127.0.0.1:8000/docs` for the interactive Swagger UI and try
-   the `/forecast` endpoint — it's backed by the real trained model in
-   `models/stage1_model.joblib`, already included in this repo.
+1. `pip install -r requirements.txt`
+2. Download `maternal_dataset_csv.csv` from the Zenodo link above and put it in `data/raw/`
+3. Open and run `notebooks/model_notebook.ipynb`
+4. To try the demo API: `uvicorn app.main:app --reload`, then open `http://127.0.0.1:8000/docs`
 
 ## Designs
-See `notebooks/fig_*.png`: missingness by feature, first- vs second-contact
-haemoglobin, follow-up gap distribution, and the Stage 1 model comparison
-chart, all generated from the real cohort. The Swagger UI at `/docs` serves
-as the interface design for the deployment mockup, since this demo is an API
-rather than a mobile/web app.
+
+Four charts are generated from the real data and saved in `notebooks/`: missingness per feature, first-visit vs. second-visit haemoglobin, the gap in weeks between visits, and the model comparison chart above. These stand in for interface mockups since the deliverable here is a prediction model, not an app screen. The API's Swagger page at `/docs` is the closest thing to an interface, it's what a screenshot of the app in action would show.
 
 ## Deployment plan
-See `deployment_plan.md`.
+
+Right now: a small local API (`app/main.py`) that takes a woman's first-visit numbers and returns a predicted haemoglobin reading, this is the MVP, just enough to show input going in and a real output coming out. No app, no SMS, no hospital system, that's intentional at this stage. If this continued past the capstone, the next step would be wrapping this same model behind a simple web or mobile form so a health worker could use it directly, deployed somewhere like Render.
+
+## What's in here
+
+- `src/` — data cleaning and model code
+- `notebooks/` — the main notebook with charts and results
+- `app/` — a small API that serves predictions
+- `tests/` — unit tests
+- `data/` — where the dataset goes (not included here, too large)
