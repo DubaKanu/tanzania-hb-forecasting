@@ -35,7 +35,7 @@ Random Forest performs best. Full charts and results are in `notebooks/model_not
 
 ## Designs
 
-Four charts are generated from the real data and saved in `notebooks/`: missingness per feature, first-visit vs. second-visit haemoglobin, the gap in weeks between visits, and the model comparison chart above. These stand in for interface mockups since the deliverable here is a prediction model, not an app screen. The API's Swagger page at `/docs` is the closest thing to an interface, it's what a screenshot of the app in action would show.
+Four charts are generated from the real data and saved in `notebooks/`: missingness per feature, first-visit vs. second-visit haemoglobin, the gap in weeks between visits, and the model comparison chart above. These stand in for interface mockups since the deliverable here is a prediction model, not an app screen. The API's Swagger page at `/docs` is the closest thing to an interface, it's See Swagger interface; Figure in this repo for the live Swagger interface.
 
 ## Deployment plan
 
