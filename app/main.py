@@ -1,10 +1,9 @@
 """
 Local demonstration API for the Tanzania haemoglobin forecasting pipeline.
 
-This is the "simple local demonstration" described in the capstone timeline
-(Week 8): it shows a predicted next-contact haemoglobin value alongside an
-estimated reliability signal for that prediction. It is a research
-demonstration, not a clinical tool, and does not replace blood testing.
+Shows a predicted next-contact haemoglobin value alongside an estimated
+reliability signal for that prediction. This is a research demonstration,
+not a clinical tool, and does not replace blood testing.
 
 Run with:
     uvicorn app.main:app --reload
@@ -16,6 +15,7 @@ import os
 import joblib
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from typing import Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 from pipeline import FEATURE_COLUMNS, _prep_matrix  # noqa: E402
@@ -41,10 +41,10 @@ class VisitOneFeatures(BaseModel):
     pregnancy_count: float = Field(..., ge=0)
     height_cm: float = Field(..., ge=100, le=200)
     weight_visit1_kg: float = Field(..., ge=30, le=150)
-    pulse_visit1_bpm: float | None = Field(None, description="Optional; imputed if missing")
-    respiratory_rate_visit1: float | None = Field(None, description="Optional; imputed if missing")
-    systolic_bp_visit1: float | None = Field(None, description="Optional; imputed if missing")
-    diastolic_bp_visit1: float | None = Field(None, description="Optional; imputed if missing")
+    pulse_visit1_bpm: Optional[float] = Field(None, description="Optional; imputed if missing")
+    respiratory_rate_visit1: Optional[float] = Field(None, description="Optional; imputed if missing")
+    systolic_bp_visit1: Optional[float] = Field(None, description="Optional; imputed if missing")
+    diastolic_bp_visit1: Optional[float] = Field(None, description="Optional; imputed if missing")
 
 
 class ForecastResponse(BaseModel):
@@ -70,9 +70,8 @@ def health():
 def forecast(features: VisitOneFeatures):
     """Predict next-contact haemoglobin from first-contact features.
 
-    Placeholder response until the frozen Stage 1 model (trained on the real
-    Tanzania cohort) is saved to models/stage1_model.joblib -- see the
-    model notebook for training that file.
+    Loads the trained Stage 1 model from models/stage1_model.joblib. If that
+    file is missing, run the model notebook first to produce it.
     """
     global _model_bundle
     if _model_bundle is None:
@@ -96,8 +95,7 @@ def forecast(features: VisitOneFeatures):
     return ForecastResponse(
         predicted_hb_visit2_g_dl=round(pred, 2),
         reliability_note=(
-            "Stage 2 reliability scoring is trained separately per the capstone "
-            "timeline (Weeks 5-7); this endpoint currently returns the Stage 1 "
-            "point forecast only."
+            "This is a Stage 1 point forecast. Stage 2 reliability scoring "
+            "has not yet been applied to this result."
         ),
     )
