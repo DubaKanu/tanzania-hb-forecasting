@@ -1,5 +1,4 @@
 hb_visit1_g_dl,gestation_visit1_weeks,maternal_age_years,pregnancy_count,height_cm,weight_visit1_kg,pulse_visit1_bpm,respiratory_rate_visit1,systolic_bp_visit1,diastolic_bp_visit1,target_hb_visit2_g_dl,gestation_visit2_weeks,_source_row,_original_risk_label
-14.7,32.0,24,2,132.0,54.0,68.0,19.0,112.0,67.0,13.5,36.0,3181,low
 11.2,25.0,41,2,171.0,63.0,80.0,20.0,113.0,73.0,11.3,30.0,4514,high
 9.9,21.0,22,3,152.0,52.0,86.0,,100.0,60.0,10.2,27.0,1699,high
 12.7,16.0,40,5,158.0,67.0,72.0,16.0,90.0,65.0,11.2,20.0,8051,high
@@ -1883,3 +1882,4 @@ hb_visit1_g_dl,gestation_visit1_weeks,maternal_age_years,pregnancy_count,height_
 8.4,12.0,25,2,150.0,60.0,90.0,18.0,119.0,70.0,10.9,28.0,2963,high
 10.5,27.0,21,1,172.0,59.0,82.0,,129.0,70.0,10.4,37.0,5196,high
 11.6,29.0,23,1,169.0,57.0,75.0,17.0,112.0,67.0,11.7,33.0,1318,high
+12.1,33.0,21,2,160.0,58.0,68.0,16.0,113.0,74.0,12.6,37.0,7517,low
