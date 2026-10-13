@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 from pipeline import (  # noqa: E402
     FEATURE_COLUMNS, TARGET_COLUMN, GESTATION_VISIT2_COLUMN,
     apply_eligibility, fixed_split, mean_absolute_error, rmse,
+    identical_vector_groups, split_group_violations, train_stage1_candidates,
     mean_signed_error, mae_at_coverage,
 )
 
@@ -65,3 +66,31 @@ def test_mae_at_coverage_picks_lowest_scores():
     scores = np.array([0.1, 0.9, 0.2, 0.8])  # low score == "more trustworthy"
     # 50% coverage should retain the two lowest-scored (indices 0, 2) -> errors 1.0, 2.0
     assert abs(mae_at_coverage(errors, scores, 0.5) - 1.5) < 1e-9
+
+
+def test_identical_vectors_stay_in_one_partition():
+    df = _toy_df(n=2700, seed=3)
+    rng = np.random.default_rng(5)
+    src = rng.choice(len(df), size=60, replace=False)
+    dst = rng.choice(np.setdiff1d(np.arange(len(df)), src), size=60, replace=False)
+    for a, b in zip(src, dst):  # force 60 identical-vector pairs
+        df.loc[b, FEATURE_COLUMNS] = df.loc[a, FEATURE_COLUMNS].values
+    train, dev, test = fixed_split(df, seed=1)
+    assert (len(train), len(dev), len(test)) == (1884, 402, 399)
+    assert split_group_violations(train, dev, test) == 0
+
+
+def test_identical_vector_groups_treat_missing_as_equal():
+    df = _toy_df(n=10)
+    df.loc[1, FEATURE_COLUMNS] = df.loc[0, FEATURE_COLUMNS].values
+    df.loc[[0, 1], "pulse_visit1_bpm"] = np.nan
+    g = identical_vector_groups(df)
+    assert g[0] == g[1]
+    assert len(set(g)) == 9
+
+
+def test_stage1_candidates_cover_all_five_models():
+    df = _toy_df(n=300, seed=2)
+    res = train_stage1_candidates(df, n_folds=3, seed=0)
+    assert list(res) == ["median", "carry_forward", "two_input_linear", "ridge", "random_forest"]
+    assert all(np.isfinite(r.cv_mae) for r in res.values())

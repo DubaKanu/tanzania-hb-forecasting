@@ -1,0 +1,64 @@
+{
+  "raw_file": "maternal_dataset_csv.csv (Zenodo 10.5281/zenodo.15309733, Version 1)",
+  "raw_md5": "0253d2d385dd80d6c9bb82df6b85fcc8",
+  "eligible_rows": 2685,
+  "partitions": {
+    "train": 1884,
+    "dev": 402,
+    "test": 399
+  },
+  "identical_vector_groups_split_across_partitions": 0,
+  "manifest_md5": "c04375163bfe4a7b9b0360806dd30e3b",
+  "config": {
+    "n_folds": 3,
+    "seed": 42,
+    "ridge": {
+      "alpha": 1.0,
+      "scaler": "StandardScaler fitted inside each fold"
+    },
+    "random_forest": {
+      "n_estimators": 200,
+      "max_depth": 6,
+      "min_samples_leaf": 5
+    }
+  },
+  "frozen_stage1_model": "random_forest",
+  "metrics_g_per_dl": {
+    "median": {
+      "train_cv_mae": 1.133,
+      "dev_mae": 1.08,
+      "dev_rmse": 1.465,
+      "dev_mean_signed_error": -0.241
+    },
+    "carry_forward": {
+      "train_cv_mae": 0.879,
+      "dev_mae": 0.926,
+      "dev_rmse": 1.308,
+      "dev_mean_signed_error": -0.034
+    },
+    "two_input_linear": {
+      "train_cv_mae": 0.81,
+      "dev_mae": 0.811,
+      "dev_rmse": 1.1,
+      "dev_mean_signed_error": -0.017
+    },
+    "ridge": {
+      "train_cv_mae": 0.799,
+      "dev_mae": 0.807,
+      "dev_rmse": 1.091,
+      "dev_mean_signed_error": -0.016
+    },
+    "random_forest": {
+      "train_cv_mae": 0.758,
+      "dev_mae": 0.794,
+      "dev_rmse": 1.097,
+      "dev_mean_signed_error": -0.027
+    }
+  },
+  "versions": {
+    "python": "3.12.3",
+    "pandas": "3.0.2",
+    "numpy": "2.4.4",
+    "scikit-learn": "1.8.0"
+  }
+}

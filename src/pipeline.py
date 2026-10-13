@@ -3,8 +3,8 @@ Tanzania antenatal haemoglobin forecasting pipeline.
 
 Implements the methodology specified in the capstone proposal:
 - Cohort construction with explicit eligibility rules
-- Fixed train/dev/test partitioning
-- Stage 1: forecast next-contact Hb (median, carry-forward, ridge, compact RF)
+- Fixed train/dev/test partitioning (identical predictor vectors kept together)
+- Stage 1: forecast next-contact Hb (median, carry-forward, two-input linear, ridge, compact RF)
 - Stage 2: estimate forecast reliability from out-of-fold Stage 1 errors
 - Coverage-based evaluation
 
@@ -15,7 +15,9 @@ This module contains no execution code; it is imported by the notebook
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GroupKFold
 from sklearn.impute import SimpleImputer
@@ -40,6 +42,19 @@ GESTATION_VISIT2_COLUMN = "gestation_visit2_weeks"
 
 # Fixed partition sizes, per the frozen protocol (do not change post hoc)
 N_TRAIN, N_DEV, N_TEST = 1884, 402, 399
+
+# Fixed Stage 1 configuration. Nothing here is tuned on the data: the settings
+# are set once, in advance, so held-out rows never influence model selection
+# for the predictions that later become Stage 2 error targets.
+STAGE1_CONFIG = {
+    "n_folds": 3,
+    "seed": 42,
+    "ridge": {"alpha": 1.0, "scaler": "StandardScaler fitted inside each fold"},
+    "random_forest": {"n_estimators": 200, "max_depth": 6, "min_samples_leaf": 5},
+}
+TWO_INPUT_COLUMNS = ["hb_visit1_g_dl", "gestation_visit1_weeks"]
+# Models that read the raw columns directly instead of the prepared matrix
+DF_MODELS = ("median", "carry_forward", "two_input_linear")
 
 
 # ---------------------------------------------------------------------------
@@ -97,26 +112,69 @@ def missingness_report(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Fixed partitioning
 # ---------------------------------------------------------------------------
+def identical_vector_groups(df: pd.DataFrame) -> np.ndarray:
+    """Integer group id per row; rows with identical values on the ten model
+    inputs share an id (missing values count as equal to missing).
+
+    This is a PROXY for "same woman", not proof. The release has no verified
+    patient identifier, so independence between partitions cannot be guaranteed.
+    """
+    return df.groupby(FEATURE_COLUMNS, dropna=False, sort=False).ngroup().to_numpy()
+
+
+def _keep_groups_together(parts: dict, groups: np.ndarray) -> dict:
+    """Move members of any split group into one partition, swapping in an
+    ungrouped row the other way so every partition keeps its exact size."""
+    sizes = np.bincount(groups)
+    part_of = {i: name for name, ids in parts.items() for i in ids}
+    for g in np.where(sizes > 1)[0]:
+        members = [int(i) for i in np.where(groups == g)[0] if int(i) in part_of]
+        if not members:
+            continue
+        home = part_of[members[0]]
+        for m in members[1:]:
+            away = part_of[m]
+            if away == home:
+                continue
+            swap = next(r for r in parts[home] if sizes[groups[r]] == 1)
+            parts[home].remove(swap)
+            parts[away].remove(m)
+            parts[home].append(m)
+            parts[away].append(swap)
+            part_of[m], part_of[swap] = home, away
+    return parts
+
+
 def fixed_split(df: pd.DataFrame, seed: int = 42):
     """Deterministic train/dev/test split at the frozen sizes.
 
-    NOTE: this is an internal split (no facility identifier is available to
-    prove separation of repeated patients/facilities). Do not describe this
-    as temporal or external validation.
+    Rows with identical predictor vectors are kept in the same partition. That
+    reduces exact-duplicate leakage but does not prove separation of repeated
+    pregnancies, patients or facilities (no verified patient or facility
+    identifier exists in the release). Describe this as internal validation,
+    never as temporal or external validation.
     """
     assert len(df) >= N_TRAIN + N_DEV + N_TEST, (
         f"Expected at least {N_TRAIN + N_DEV + N_TEST} eligible rows, got {len(df)}"
     )
     rng = np.random.default_rng(seed)
     idx = rng.permutation(len(df))
-    train_idx = idx[:N_TRAIN]
-    dev_idx = idx[N_TRAIN:N_TRAIN + N_DEV]
-    test_idx = idx[N_TRAIN + N_DEV:N_TRAIN + N_DEV + N_TEST]
-    return (
-        df.iloc[train_idx].reset_index(drop=True),
-        df.iloc[dev_idx].reset_index(drop=True),
-        df.iloc[test_idx].reset_index(drop=True),
-    )
+    parts = {
+        "train": idx[:N_TRAIN].tolist(),
+        "dev": idx[N_TRAIN:N_TRAIN + N_DEV].tolist(),
+        "test": idx[N_TRAIN + N_DEV:N_TRAIN + N_DEV + N_TEST].tolist(),
+    }
+    parts = _keep_groups_together(parts, identical_vector_groups(df))
+    return tuple(df.iloc[parts[k]].reset_index(drop=True) for k in ("train", "dev", "test"))
+
+
+def partition_manifest(train: pd.DataFrame, dev: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
+    """Which source row sits in which partition (the saved split manifest)."""
+    return pd.concat([
+        pd.DataFrame({"_source_row": train["_source_row"], "partition": "train"}),
+        pd.DataFrame({"_source_row": dev["_source_row"], "partition": "dev"}),
+        pd.DataFrame({"_source_row": test["_source_row"], "partition": "test"}),
+    ], ignore_index=True)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +199,21 @@ class CarryForwardBaseline:
         return np.asarray(X["hb_visit1_g_dl"])
 
 
+class TwoInputLinear:
+    """Linear regression on first Hb and first gestational week only.
+
+    Tests whether the other eight first-contact measurements add anything
+    beyond these two simple inputs.
+    """
+
+    def fit(self, X, y):
+        self.model_ = LinearRegression().fit(X[TWO_INPUT_COLUMNS], y)
+        return self
+
+    def predict(self, X):
+        return self.model_.predict(X[TWO_INPUT_COLUMNS])
+
+
 def _prep_matrix(X: pd.DataFrame, imputer: SimpleImputer = None, fit: bool = False):
     """Median-impute + missingness indicators, fit only on training data."""
     ind = X[FEATURE_COLUMNS].isna().astype(int).add_suffix("_missing")
@@ -162,22 +235,29 @@ class Stage1Result:
 
 
 def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int = 42):
-    """Train & compare the four Stage 1 candidates with grouped CV inside training.
+    """Train and compare the five Stage 1 candidates inside the training partition.
 
-    Returns a dict of Stage1Result, so the caller can pick the frozen winner
-    by cv_mae (lower is better) rather than by peeking at development data.
+    Cross-validation is 3-fold with folds that keep rows sharing an identical
+    predictor vector together (a proxy for patient grouping, not proof of
+    independence). Imputation, missingness indicators and scaling are fitted
+    inside each fold. Settings are fixed (STAGE1_CONFIG), not tuned.
+
+    Returns a dict of Stage1Result so the caller can freeze the winner by
+    cv_mae (lower is better) without looking at development data.
     """
     y = train_df[TARGET_COLUMN].values
-    groups = np.arange(len(train_df))  # no repeated-patient identifier available
+    groups = identical_vector_groups(train_df)
     gkf = GroupKFold(n_splits=n_folds)
+    cfg = STAGE1_CONFIG
 
     candidates = {
         "median": lambda: MedianBaseline(),
         "carry_forward": lambda: CarryForwardBaseline(),
-        "ridge": lambda: Ridge(alpha=1.0, random_state=seed),
-        "random_forest": lambda: RandomForestRegressor(
-            n_estimators=200, max_depth=6, min_samples_leaf=5, random_state=seed
+        "two_input_linear": lambda: TwoInputLinear(),
+        "ridge": lambda: make_pipeline(
+            StandardScaler(), Ridge(alpha=cfg["ridge"]["alpha"], random_state=seed)
         ),
+        "random_forest": lambda: RandomForestRegressor(**cfg["random_forest"], random_state=seed),
     }
 
     results = {}
@@ -188,7 +268,7 @@ def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int 
             Xtr, imp = _prep_matrix(fold_train, fit=True)
             Xval, _ = _prep_matrix(fold_val, imputer=imp, fit=False)
             model = make_model()
-            if name in ("median", "carry_forward"):
+            if name in DF_MODELS:
                 model.fit(fold_train, fold_train[TARGET_COLUMN])
                 pred = model.predict(fold_val)
             else:
@@ -199,7 +279,7 @@ def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int 
         # refit on the full training partition for the frozen candidate
         Xtr_full, imp_full = _prep_matrix(train_df, fit=True)
         final_model = make_model()
-        if name in ("median", "carry_forward"):
+        if name in DF_MODELS:
             final_model.fit(train_df, y)
         else:
             final_model.fit(Xtr_full, y)
@@ -211,7 +291,7 @@ def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int 
 
 
 def stage1_predict(result: "Stage1Result", df: pd.DataFrame) -> np.ndarray:
-    if result.name in ("median", "carry_forward"):
+    if result.name in DF_MODELS:
         return result.model.predict(df)
     X, _ = _prep_matrix(df, imputer=result.imputer, fit=False)
     return result.model.predict(X)
@@ -244,3 +324,11 @@ def mae_at_coverage(errors: np.ndarray, scores: np.ndarray, coverage: float) -> 
     order = np.argsort(scores)  # ascending: most trustworthy first
     keep = order[:n_keep]
     return float(np.mean(errors[keep]))
+
+
+def split_group_violations(train: pd.DataFrame, dev: pd.DataFrame, test: pd.DataFrame) -> int:
+    """Number of identical-vector groups that appear in more than one partition (should be 0)."""
+    parts = pd.concat([train.assign(_p="train"), dev.assign(_p="dev"), test.assign(_p="test")], ignore_index=True)
+    g = identical_vector_groups(parts)
+    n_parts = pd.Series(parts["_p"].values).groupby(g).nunique()
+    return int((n_parts > 1).sum())
