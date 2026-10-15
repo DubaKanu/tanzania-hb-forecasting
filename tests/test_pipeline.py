@@ -13,7 +13,8 @@ from pipeline import (  # noqa: E402
     FEATURE_COLUMNS, TARGET_COLUMN, GESTATION_VISIT2_COLUMN,
     apply_eligibility, fixed_split, mean_absolute_error, rmse,
     identical_vector_groups, split_group_violations, train_stage1_candidates,
-    mean_signed_error, mae_at_coverage,
+    mean_signed_error, mae_at_coverage, assign_cv_folds, n_keep, keep_mask,
+    paired_bootstrap_difference,
 )
 
 
@@ -94,3 +95,57 @@ def test_stage1_candidates_cover_all_five_models():
     res = train_stage1_candidates(df, n_folds=3, seed=0)
     assert list(res) == ["median", "carry_forward", "two_input_linear", "ridge", "random_forest"]
     assert all(np.isfinite(r.cv_mae) for r in res.values())
+
+
+def test_stage1_candidates_keep_out_of_fold_forecasts():
+    df = _toy_df(n=300, seed=2)
+    res = train_stage1_candidates(df, n_folds=3, seed=0)
+    oof = res["random_forest"].oof_pred
+    assert len(oof) == len(df) and np.isfinite(oof).all()
+
+
+def test_cv_fold_rule_matches_a_hand_worked_example():
+    # Group 0 has two rows, so it goes first (to fold 0). The single-row groups then go,
+    # in group order, to the lightest fold, the lowest fold number winning ties.
+    groups = np.array([0, 1, 2, 0, 3, 4, 5, 6])
+    assert list(assign_cv_folds(groups, 3)) == [0, 1, 2, 0, 1, 2, 0, 1]
+
+
+def test_cv_folds_are_repeatable_balanced_and_never_split_a_group():
+    df = _toy_df(n=300, seed=4)
+    src = np.arange(0, 20)
+    dst = np.arange(100, 120)
+    for a, b in zip(src, dst):  # 20 identical-vector pairs
+        df.loc[b, FEATURE_COLUMNS] = df.loc[a, FEATURE_COLUMNS].values
+    groups = identical_vector_groups(df)
+    folds = assign_cv_folds(groups, 3)
+    assert (folds == assign_cv_folds(groups, 3)).all()
+    assert set(folds) == {0, 1, 2}
+    for g in np.unique(groups):
+        assert len(set(folds[groups == g])) == 1
+    assert np.bincount(folds).max() - np.bincount(folds).min() <= 2
+
+
+def test_n_keep_follows_the_protocol_numbers():
+    assert n_keep(399, 0.8) == 319   # the locked-test number in the protocol
+    assert n_keep(402, 0.8) == 322
+    assert n_keep(399, 1.0) == 399
+    assert n_keep(5, 0.7) == 4       # 3.5 rounds up
+    assert n_keep(10, 0.9) == 9
+
+
+def test_ties_are_broken_by_record_id_not_by_row_position():
+    scores = np.array([1.0, 1.0, 1.0, 1.0])
+    ids = np.array([40, 10, 30, 20])
+    kept = keep_mask(scores, 0.5, ids)
+    assert set(ids[kept]) == {10, 20}
+    order = np.array([2, 0, 3, 1])  # shuffle the rows: the same women are kept
+    assert set(ids[order][keep_mask(scores[order], 0.5, ids[order])]) == {10, 20}
+    errors = np.array([1.0, 2.0, 3.0, 4.0])
+    assert mae_at_coverage(errors, np.zeros(4), 0.5, np.array([4, 3, 2, 1])) == 3.5
+
+
+def test_paired_bootstrap_difference_on_a_constant_gap():
+    a, b = np.full(50, 1.0), np.full(50, 2.0)
+    d = paired_bootstrap_difference(a, b, n_boot=200, seed=0)
+    assert d["difference"] == -1.0 and d["ci95_low"] == -1.0 and d["ci95_high"] == -1.0

@@ -9,6 +9,8 @@
   },
   "identical_vector_groups_split_across_partitions": 0,
   "manifest_md5": "c04375163bfe4a7b9b0360806dd30e3b",
+  "cv_folds_md5": "678158fe22a782e242d9926e19966adb",
+  "cv_fold_rule": "Groups of rows with an identical ten-input vector are never split. Groups are taken largest first (ties by group number, which follows the row order of train.csv) and each goes to the fold with the fewest rows so far (ties to the lowest fold number). Folds are numbered 0, 1, 2.",
   "config": {
     "n_folds": 3,
     "seed": 42,
@@ -43,22 +45,69 @@
       "dev_mean_signed_error": -0.017
     },
     "ridge": {
-      "train_cv_mae": 0.799,
+      "train_cv_mae": 0.8,
       "dev_mae": 0.807,
       "dev_rmse": 1.091,
       "dev_mean_signed_error": -0.016
     },
     "random_forest": {
-      "train_cv_mae": 0.758,
+      "train_cv_mae": 0.76,
       "dev_mae": 0.794,
       "dev_rmse": 1.097,
       "dev_mean_signed_error": -0.027
     }
   },
+  "paired_comparisons_mae_difference_g_per_dl": {
+    "meaning": "random_forest minus the other model, mean absolute error on the same women; negative favours the forest. Paired bootstrap, 5000 replicates, seed 42, 95% interval.",
+    "training_out_of_fold": {
+      "random_forest_minus_median": {
+        "difference": -0.373,
+        "ci95_low": -0.413,
+        "ci95_high": -0.333
+      },
+      "random_forest_minus_carry_forward": {
+        "difference": -0.118,
+        "ci95_low": -0.146,
+        "ci95_high": -0.091
+      },
+      "random_forest_minus_two_input_linear": {
+        "difference": -0.05,
+        "ci95_low": -0.064,
+        "ci95_high": -0.036
+      },
+      "random_forest_minus_ridge": {
+        "difference": -0.04,
+        "ci95_low": -0.053,
+        "ci95_high": -0.027
+      }
+    },
+    "development": {
+      "random_forest_minus_median": {
+        "difference": -0.286,
+        "ci95_low": -0.375,
+        "ci95_high": -0.196
+      },
+      "random_forest_minus_carry_forward": {
+        "difference": -0.133,
+        "ci95_low": -0.196,
+        "ci95_high": -0.07
+      },
+      "random_forest_minus_two_input_linear": {
+        "difference": -0.017,
+        "ci95_low": -0.045,
+        "ci95_high": 0.011
+      },
+      "random_forest_minus_ridge": {
+        "difference": -0.013,
+        "ci95_low": -0.041,
+        "ci95_high": 0.014
+      }
+    }
+  },
   "versions": {
-    "python": "3.12.3",
-    "pandas": "3.0.2",
-    "numpy": "2.4.4",
-    "scikit-learn": "1.8.0"
+    "python": "3.9.25",
+    "pandas": "2.3.3",
+    "numpy": "2.0.2",
+    "scikit-learn": "1.6.1"
   }
 }

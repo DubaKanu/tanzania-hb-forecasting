@@ -5,21 +5,25 @@ Implements the methodology specified in the capstone proposal:
 - Cohort construction with explicit eligibility rules
 - Fixed train/dev/test partitioning (identical predictor vectors kept together)
 - Stage 1: forecast next-contact Hb (median, carry-forward, two-input linear, ridge, compact RF)
-- Stage 2: estimate forecast reliability from out-of-fold Stage 1 errors
-- Coverage-based evaluation
+- Cross-validation folds assigned by a fixed rule written in this file
+- Coverage-based evaluation helpers shared by every selector
+
+Stage 2 (reliability estimation and the selector comparison) lives in
+stage2.py and builds on the functions here.
 
 This module contains no execution code; it is imported by the notebook
-(for exploration and reporting) and by app/main.py (for the demo API).
+(for exploration and reporting), by the run scripts and by app/main.py
+(for the demo API).
 """
 
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+from typing import Optional
 from sklearn.linear_model import Ridge, LinearRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import GroupKFold
 from sklearn.impute import SimpleImputer
 
 # ---------------------------------------------------------------------------
@@ -177,6 +181,36 @@ def partition_manifest(train: pd.DataFrame, dev: pd.DataFrame, test: pd.DataFram
     ], ignore_index=True)
 
 
+CV_FOLD_RULE = (
+    "Groups of rows with an identical ten-input vector are never split. Groups are taken "
+    "largest first (ties by group number, which follows the row order of train.csv) and each "
+    "goes to the fold with the fewest rows so far (ties to the lowest fold number). "
+    "Folds are numbered 0, 1, 2."
+)
+
+
+def assign_cv_folds(groups: np.ndarray, n_folds: int = 3) -> np.ndarray:
+    """Fold number (0 .. n_folds-1) for every row, by a fixed rule.
+
+    The rule is written out here instead of left to a library default. A library
+    default (scikit-learn's GroupKFold) breaks ties between equal-sized groups in a
+    way that changed between versions and moved the cross-validation MAE by about
+    0.003 g/dL, which would change the out-of-fold table that Stage 2 learns from.
+    This rule gives the same folds on every machine and every library version.
+    """
+    groups = np.asarray(groups)
+    sizes = np.bincount(groups)
+    # Largest group first; equal sizes in group-number order (lexsort is stable).
+    order = np.lexsort((np.arange(len(sizes)), -sizes))
+    load = np.zeros(n_folds, dtype=int)
+    fold_of_group = np.zeros(len(sizes), dtype=int)
+    for g in order:
+        f = int(np.argmin(load))  # argmin returns the lowest fold number on a tie
+        fold_of_group[g] = f
+        load[f] += sizes[g]
+    return fold_of_group[groups]
+
+
 # ---------------------------------------------------------------------------
 # Stage 1 models
 # ---------------------------------------------------------------------------
@@ -232,25 +266,13 @@ class Stage1Result:
     model: object
     imputer: SimpleImputer
     cv_mae: float
+    oof_pred: Optional[np.ndarray] = None  # out-of-fold forecast for every training row
 
 
-def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int = 42):
-    """Train and compare the five Stage 1 candidates inside the training partition.
-
-    Cross-validation is 3-fold with folds that keep rows sharing an identical
-    predictor vector together (a proxy for patient grouping, not proof of
-    independence). Imputation, missingness indicators and scaling are fitted
-    inside each fold. Settings are fixed (STAGE1_CONFIG), not tuned.
-
-    Returns a dict of Stage1Result so the caller can freeze the winner by
-    cv_mae (lower is better) without looking at development data.
-    """
-    y = train_df[TARGET_COLUMN].values
-    groups = identical_vector_groups(train_df)
-    gkf = GroupKFold(n_splits=n_folds)
+def stage1_candidate_factories(seed: int = 42) -> dict:
+    """The five Stage 1 candidates, each built from the fixed STAGE1_CONFIG (nothing is tuned)."""
     cfg = STAGE1_CONFIG
-
-    candidates = {
+    return {
         "median": lambda: MedianBaseline(),
         "carry_forward": lambda: CarryForwardBaseline(),
         "two_input_linear": lambda: TwoInputLinear(),
@@ -260,21 +282,59 @@ def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int 
         "random_forest": lambda: RandomForestRegressor(**cfg["random_forest"], random_state=seed),
     }
 
+
+def cross_validated_predictions(train_df: pd.DataFrame, make_model, name: str, folds: np.ndarray,
+                                want_disagreement: bool = False):
+    """Out-of-fold forecast for every training row.
+
+    Each row is forecast by a model fitted on the other folds only, so no row is ever
+    predicted by a model that saw it. Imputation and the missing-value flags are fitted
+    inside each fold. If want_disagreement is True and the model is a forest, the
+    disagreement among its individual trees is recorded for every row as well.
+
+    Returns (forecast, disagreement or None, list of the mean absolute error of each fold).
+    """
+    n = len(train_df)
+    oof = np.full(n, np.nan)
+    td = np.full(n, np.nan) if want_disagreement else None
+    fold_maes = []
+    for k in np.unique(folds):
+        train_i = np.where(folds != k)[0]
+        val_i = np.where(folds == k)[0]
+        fold_train, fold_val = train_df.iloc[train_i], train_df.iloc[val_i]
+        Xtr, imp = _prep_matrix(fold_train, fit=True)
+        Xval, _ = _prep_matrix(fold_val, imputer=imp, fit=False)
+        model = make_model()
+        if name in DF_MODELS:
+            model.fit(fold_train, fold_train[TARGET_COLUMN])
+            pred = model.predict(fold_val)
+        else:
+            model.fit(Xtr, fold_train[TARGET_COLUMN])
+            pred = model.predict(Xval)
+            if want_disagreement:
+                td[val_i] = tree_disagreement(model, Xval)
+        oof[val_i] = pred
+        fold_maes.append(mean_absolute_error(fold_val[TARGET_COLUMN], pred))
+    return oof, td, fold_maes
+
+
+def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int = 42):
+    """Train and compare the five Stage 1 candidates inside the training partition.
+
+    Cross-validation is 3-fold. Folds come from assign_cv_folds, which keeps rows that
+    share an identical predictor vector together (a proxy for patient grouping, not
+    proof of independence). Imputation, missingness indicators and scaling are fitted
+    inside each fold. Settings are fixed (STAGE1_CONFIG), not tuned.
+
+    Returns a dict of Stage1Result so the caller can freeze the winner by
+    cv_mae (lower is better) without looking at development data.
+    """
+    y = train_df[TARGET_COLUMN].values
+    folds = assign_cv_folds(identical_vector_groups(train_df), n_folds)
+
     results = {}
-    for name, make_model in candidates.items():
-        fold_errors = []
-        for train_i, val_i in gkf.split(train_df, groups=groups):
-            fold_train, fold_val = train_df.iloc[train_i], train_df.iloc[val_i]
-            Xtr, imp = _prep_matrix(fold_train, fit=True)
-            Xval, _ = _prep_matrix(fold_val, imputer=imp, fit=False)
-            model = make_model()
-            if name in DF_MODELS:
-                model.fit(fold_train, fold_train[TARGET_COLUMN])
-                pred = model.predict(fold_val)
-            else:
-                model.fit(Xtr, fold_train[TARGET_COLUMN])
-                pred = model.predict(Xval)
-            fold_errors.append(mean_absolute_error(fold_val[TARGET_COLUMN], pred))
+    for name, make_model in stage1_candidate_factories(seed).items():
+        oof, _, fold_maes = cross_validated_predictions(train_df, make_model, name, folds)
 
         # refit on the full training partition for the frozen candidate
         Xtr_full, imp_full = _prep_matrix(train_df, fit=True)
@@ -285,7 +345,8 @@ def train_stage1_candidates(train_df: pd.DataFrame, n_folds: int = 3, seed: int 
             final_model.fit(Xtr_full, y)
 
         results[name] = Stage1Result(
-            name=name, model=final_model, imputer=imp_full, cv_mae=float(np.mean(fold_errors))
+            name=name, model=final_model, imputer=imp_full,
+            cv_mae=float(np.mean(fold_maes)), oof_pred=oof,
         )
     return results
 
@@ -318,12 +379,56 @@ def mean_signed_error(y_true, y_pred) -> float:
     return float(np.mean(np.asarray(y_pred) - np.asarray(y_true)))
 
 
-def mae_at_coverage(errors: np.ndarray, scores: np.ndarray, coverage: float) -> float:
-    """Retain the `coverage` fraction with the LOWEST scores (most 'trustworthy'), report MAE."""
-    n_keep = int(round(len(errors) * coverage))
-    order = np.argsort(scores)  # ascending: most trustworthy first
-    keep = order[:n_keep]
-    return float(np.mean(errors[keep]))
+def n_keep(n_total: int, coverage: float) -> int:
+    """How many forecasts an exact-coverage rule keeps: round(coverage x N), halves rounded up.
+
+    For 80% of the 399 locked-test women this is 319; for 80% of the 402 development
+    women it is 322. (The extra round() guards against floating-point noise such as
+    3.4999999999999996 standing in for 3.5.)
+    """
+    return int(np.floor(round(n_total * coverage, 9) + 0.5))
+
+
+def keep_mask(scores, coverage: float, record_ids=None) -> np.ndarray:
+    """True for the forecasts kept at this coverage: the n lowest scores.
+
+    A LOWER score means a MORE reliable forecast. Ties are broken by record ID,
+    ascending, so the result never depends on a sorting library's tie behaviour.
+    """
+    scores = np.asarray(scores, dtype=float)
+    ids = np.arange(len(scores)) if record_ids is None else np.asarray(record_ids)
+    order = np.lexsort((ids, scores))  # last key is the primary one: score, then record ID
+    mask = np.zeros(len(scores), dtype=bool)
+    mask[order[:n_keep(len(scores), coverage)]] = True
+    return mask
+
+
+def mae_at_coverage(errors, scores, coverage: float, record_ids=None) -> float:
+    """MAE of the retained forecasts when the `coverage` fraction with the lowest scores is kept."""
+    errors = np.asarray(errors, dtype=float)
+    kept = keep_mask(scores, coverage, record_ids)
+    return float(np.mean(errors[kept])) if kept.any() else float("nan")
+
+
+def paired_bootstrap_difference(values_a, values_b, groups=None, n_boot: int = 5000, seed: int = 42):
+    """Mean of (a - b) over paired cases with a 95% percentile interval.
+
+    Resamples whole identical-vector groups with replacement (effectively single
+    records, because only one pair of identical records exists). Used to ask whether
+    one model's per-woman absolute errors are lower than another's on the same women.
+    """
+    a = np.asarray(values_a, dtype=float)
+    b = np.asarray(values_b, dtype=float)
+    d = a - b
+    g = np.arange(len(d)) if groups is None else np.asarray(groups)
+    members = [np.where(g == k)[0] for k in np.unique(g)]
+    rng = np.random.default_rng(seed)
+    means = np.empty(n_boot)
+    for i in range(n_boot):
+        pick = rng.integers(0, len(members), size=len(members))
+        means[i] = d[np.concatenate([members[j] for j in pick])].mean()
+    lo, hi = np.percentile(means, [2.5, 97.5])
+    return {"difference": float(d.mean()), "ci95_low": float(lo), "ci95_high": float(hi)}
 
 
 def split_group_violations(train: pd.DataFrame, dev: pd.DataFrame, test: pd.DataFrame) -> int:

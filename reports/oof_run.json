@@ -1,0 +1,44 @@
+{
+  "run_id": "run-c6b409a2f7",
+  "rows": 1884,
+  "columns": [
+    "run_id",
+    "record_id",
+    "fold",
+    "observed_hb",
+    "oof_forecast",
+    "tree_disagreement",
+    "abs_error"
+  ],
+  "folds": {
+    "rule": "Groups of rows with an identical ten-input vector are never split. Groups are taken largest first (ties by group number, which follows the row order of train.csv) and each goes to the fold with the fewest rows so far (ties to the lowest fold number). Folds are numbered 0, 1, 2.",
+    "rows_per_fold": {
+      "0": 628,
+      "1": 628,
+      "2": 628
+    }
+  },
+  "pooled_oof_mae_g_per_dl": 0.76,
+  "stage1_config": {
+    "n_folds": 3,
+    "seed": 42,
+    "ridge": {
+      "alpha": 1.0,
+      "scaler": "StandardScaler fitted inside each fold"
+    },
+    "random_forest": {
+      "n_estimators": 200,
+      "max_depth": 6,
+      "min_samples_leaf": 5
+    }
+  },
+  "raw_md5": "0253d2d385dd80d6c9bb82df6b85fcc8",
+  "manifest_md5": "c04375163bfe4a7b9b0360806dd30e3b",
+  "cv_folds_md5": "678158fe22a782e242d9926e19966adb",
+  "versions": {
+    "python": "3.9.25",
+    "pandas": "2.3.3",
+    "numpy": "2.0.2",
+    "scikit-learn": "1.6.1"
+  }
+}
