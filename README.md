@@ -7,6 +7,8 @@ GitHub repo: https://github.com/DubaKanu/tanzania-hb-forecasting
 
 Video demo (the initial Stage 1 demonstration): https://drive.google.com/file/d/1hme7EPQWwJKcGfEDZ_sLhvhIecOXRt67/view?usp=sharing
 
+Live demo of the API (made-up values only; it runs on a free plan, so the first request after a quiet period can take about a minute): https://tanzania-hb-forecast-demo.onrender.com/docs
+
 ## What this does
 
 The project has two stages, both trained on real antenatal records from Tanzania.
@@ -25,7 +27,7 @@ This is a research demo, not a medical tool. It does not replace blood testing a
 | Stage 2: out-of-fold errors, error model, four ways of choosing forecasts compared | Done on the 402 development women |
 | Locked test on the 399 reserved women | **Not run yet.** It runs once, after the protocol in `docs/frozen_protocol.md` is frozen |
 | Demo API with the Stage 2 output, tested against 8 acceptance checks | Done, runs locally |
-| Hosting the demo on Render | Planned, see `deployment_plan.md` |
+| Hosting the demo on Render | Done. Live at https://tanzania-hb-forecast-demo.onrender.com/docs and checked on 18 October 2026, see `deployment_plan.md` |
 
 ## Data
 
@@ -126,7 +128,24 @@ The locked test is not part of the normal steps. After the supervisor has seen `
 
 `POST /forecast` takes a woman's first-visit values. Hb, gestational week, age, number of pregnancies, height and weight are required. Pulse, respiratory rate and the two blood pressures are optional and are filled in if missing. Hb must be 3 to 20 g/dL, gestational week 1 to 42, age 10 to 60, height 100 to 200 cm and weight 30 to 150 kg. Anything outside these ranges is refused with a 422 error.
 
-It returns the Stage 1 forecast, the Stage 2 estimated error, whether the forecast would be kept or set aside, the cutoff used, and a research-only disclaimer. Example (a real response from the saved models):
+Example request (made-up values):
+
+```json
+{
+  "hb_visit1_g_dl": 10.8,
+  "gestation_visit1_weeks": 20,
+  "maternal_age_years": 28,
+  "pregnancy_count": 2,
+  "height_cm": 160,
+  "weight_visit1_kg": 62,
+  "pulse_visit1_bpm": 80,
+  "respiratory_rate_visit1": 18,
+  "systolic_bp_visit1": 118,
+  "diastolic_bp_visit1": 76
+}
+```
+
+It returns the Stage 1 forecast, the Stage 2 estimated error, whether the forecast would be kept or set aside, the cutoff used, and a research-only disclaimer. The response to that request, from the saved models (the live copy gave the same numbers):
 
 ```json
 {
@@ -141,13 +160,22 @@ It returns the Stage 1 forecast, the Stage 2 estimated error, whether the foreca
 
 One woman cannot be ranked against others, so the API needs a cutoff. It uses the 80th percentile of the Stage 2 scores of the development women (0.915 g/dL). This cutoff is fitted on development data, so it is a different method from the exact-coverage ranking used in the evaluation, and the response says so. The service stores nothing it receives and does not log the inputs.
 
+### The hosted demo
+
+The demo runs on Render's free plan at https://tanzania-hb-forecast-demo.onrender.com. Open `/docs`, choose `POST /forecast`, click Try it out, paste the request above and click Execute. Use made-up values only.
+
+- `GET /health` shows `"model_loaded": false` until the first valid forecast has been made, and `true` after that. The two models are read from disk on the first valid forecast, not when the service starts. So `false` at the start is normal, and `"status": "ok"` is the part that says the service is up. It goes back to `false` after the service has slept and woken up.
+- The free plan stops the service after 15 minutes without requests. The first request after that can take about a minute while it wakes up.
+- A request that fails the input check, such as an Hb of 25, is refused with a 422 error before any model code runs. It does not load the models.
+- Checked on the live copy on 18 October 2026: the request above returned 200 with a forecast of 10.56, an estimated error of 0.492 and "kept"; an Hb of 25 returned 422; and `/health` showed `"model_loaded": true` afterwards. The details are in `docs/acceptance_checks.md`.
+
 ## Designs
 
 Charts made from the real data are saved in `notebooks/`: missingness per feature, first-visit against second-visit haemoglobin, the gap in weeks between visits, the Stage 1 model comparison, and error against coverage for Stage 2. The Stage 2 figures are also in `reports/`. Screenshots of the Swagger interface show a sample request and its response. `docs/swagger_interface_stage2.png` is the current version, with the Stage 2 estimated error and the kept flag, and `Swagger interface; Figure.png` is the earlier Stage 1 version. They are the closest thing to an interface screenshot for this project.
 
 ## Deployment plan
 
-Right now the demo is a small local API (`app/main.py`). The next step is to host it on Render so it can be shown at the defense from a web address, with Python fixed to 3.11 and the saved models committed in the repo. No hosted address exists yet. The steps, the checks to pass first and what is out of scope are in `deployment_plan.md`. There is no app, no SMS and no hospital system, and that is intentional.
+The demo API (`app/main.py`) is hosted on Render's free plan at https://tanzania-hb-forecast-demo.onrender.com. It was created on 18 October 2026 as a Blueprint from `render.yaml`, using the `post-feedback-revision` branch, with Python fixed to 3.11.9 and the saved models committed in the repo. The settings, what to expect on the free plan, the checks run on the live copy and what is out of scope are in `deployment_plan.md`. There is no app, no SMS and no hospital system, and that is intentional.
 
 ## Limits
 
@@ -168,5 +196,5 @@ Right now the demo is a small local API (`app/main.py`). The next step is to hos
 - `reports/`: the audit report, Stage 1 and Stage 2 results, tables and figures
 - `docs/`: the protocol for the locked test, the acceptance checks and the current interface screenshot
 - `data/`: the raw file, the prepared files, the split manifest and the fold assignments
-- `deployment_plan.md`, `render.yaml`: the hosting plan and the Render settings
+- `deployment_plan.md`, `render.yaml`: how the demo is hosted on Render, and the Render settings
 - Cross-validation folds come from a fixed rule in `src/pipeline.py`, not from scikit-learn's `GroupKFold`, whose tie-breaking changed between versions and shifted the results slightly.

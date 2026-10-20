@@ -23,7 +23,20 @@ Run on 14 October 2026 on a clean copy of the repository, in a new virtual envir
 
 - Python 3.9.25: all 55 tests passed. The regenerated reports, figures and models were identical to the saved ones. The notebook ran top to bottom without errors and gave the same outputs. The API answered the sample request with forecast 10.56, estimated error 0.492, kept, and refused an Hb of 25 with a 422 error.
 - With the saved models, the 55 tests also passed on Python 3.10, 3.11 and 3.12. Retraining on those versions gave the same results as on 3.9.
-- Not tested: macOS or Windows, and a hosted copy on Render. The hosted copy is checked once it exists (see `deployment_plan.md`).
+- Not tested: macOS or Windows. The hosted copy on Render was checked separately (next section).
+
+## Hosted copy on Render (checked 18 October 2026)
+
+The demo is live at https://tanzania-hb-forecast-demo.onrender.com. These checks were run by hand on 18 October 2026, in a browser and in the Swagger page at `/docs`, using the sample request in the README. At the time, the live copy was built from commit `807acd6`.
+
+| Check on the live copy | Result |
+|---|---|
+| `GET /health` answers with `"status": "ok"` | Passed. It showed `"model_loaded": false` before the first forecast, as designed |
+| The sample request returns 200 with the same numbers as the local service | Passed. Forecast 10.56, estimated error 0.492, kept, cutoff 0.915 |
+| An Hb of 25 is refused (acceptance check 2) | Passed. Status 422, "Input should be less than or equal to 20" |
+| `GET /health` after the first forecast | Passed. It showed `"model_loaded": true` |
+
+The other checks (same input gives the same output, optional inputs left out, the disclaimer on every response, nothing stored) were not repeated by hand on the live copy. They run in `tests/test_api.py` on the same code. `deployment_plan.md` explains why `model_loaded` starts as `false`.
 
 ## What the checks do not cover
 

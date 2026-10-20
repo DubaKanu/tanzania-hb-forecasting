@@ -2,20 +2,20 @@
 
 ## What exists now
 
-- A local FastAPI service (`app/main.py`) with an interactive Swagger page at `/docs`.
+- A FastAPI service (`app/main.py`) with an interactive Swagger page at `/docs`. It runs locally, and since 18 October 2026 it also runs on Render at https://tanzania-hb-forecast-demo.onrender.com.
 - `POST /forecast` returns the Stage 1 haemoglobin forecast, the Stage 2 estimated error, a kept or set-aside flag, the cutoff used and a research-only disclaimer. The service stores nothing it receives and does not log the inputs.
 - It loads the saved models in `models/` and does not retrain when it starts.
-- It is checked by eight acceptance checks (`docs/acceptance_checks.md`).
+- It is checked by eight acceptance checks (`docs/acceptance_checks.md`). The live copy was also checked by hand on 18 October 2026 (see below).
 - There is no mobile app, SMS or hospital integration. This is a retrospective computational study, and the supervisor-approved scope is a simple demonstration.
 
-## Next: host the demo on Render (planned, not done yet)
+## Hosted on Render
 
-The plan for the defense is to host the demo on Render, show it running, and walk through the code. No hosted address exists yet. Nothing below has been done on Render.
+The demo is hosted on Render's free plan at https://tanzania-hb-forecast-demo.onrender.com (the Swagger page is at `/docs`). It was created on 18 October 2026 as a Blueprint from `render.yaml`, using the `post-feedback-revision` branch of the GitHub repo. By default, each new commit on that branch starts a new build.
 
-### Before creating the service
+### How it was set up
 
-1. Run `python src/run_stage1.py`, `python src/run_stage2.py` and `pytest tests/` on the final code. All tests must pass.
-2. Make sure `models/stage1_model.joblib` and `models/stage2_model.joblib` are committed. Render builds from the repo and the API only loads these files.
+1. The models were made with `python src/run_stage1.py` and `python src/run_stage2.py`, and `models/stage1_model.joblib` and `models/stage2_model.joblib` are committed in the repo. Render builds from the repo, and the API only loads these two files.
+2. In Render: New, then Blueprint, then the GitHub repo and the branch `post-feedback-revision`. Render read `render.yaml` and created the web service `tanzania-hb-forecast-demo`.
 
 ### Settings (a web service on the free plan)
 
@@ -28,27 +28,37 @@ The plan for the defense is to host the demo on Render, show it running, and wal
 | Environment variable | `PYTHON_VERSION` = `3.11.9` |
 | Health check path | `/health` |
 
-`render.yaml` in the repo holds the same settings, for use as a Render Blueprint. It names the free plan on purpose, because a Blueprint that leaves the plan out creates a paid instance.
+`render.yaml` in the repo holds the same settings. It names the free plan on purpose, because a Blueprint that leaves the plan out creates a paid instance.
 
 ### Why the Python version is set
 
-Render's default Python for services created on or after 11 February 2026 is 3.14.3. The libraries in `requirements.txt` are pinned to the versions the results were produced with, and some of them (numpy 2.0.2 and scikit-learn 1.6.1) have no builds for Python 3.14, so a service left on the default would fail to build. The full version must be given, for example `3.11.9`. The same code and models were checked on Python 3.9, 3.10, 3.11 and 3.12 and give the same results.
+Render's default Python depends on when a service was created. It was 3.14.3 for services created from 11 February 2026, and it is 3.14.8 for services created on or after 12 October 2026, which includes this one. The libraries in `requirements.txt` are pinned to the versions the results were produced with. numpy 2.0.2 and scikit-learn 1.6.1 have no ready-made builds for Python 3.14 (checked on 18 October 2026), so on the default Python, pip would have to build them from source. Setting `PYTHON_VERSION` avoids that. The full version must be given, for example `3.11.9`. The same code and models were checked on Python 3.9, 3.10, 3.11 and 3.12 and give the same results.
 
 ### What to expect on the free plan
 
-- A free web service spins down after 15 minutes without requests and starts again on the next request. The first request after a quiet period is slow. Open the `/health` address a few minutes before a demonstration.
+- A free web service spins down after 15 minutes without requests and starts again on the next request. The first request after a quiet period is slow, so open the `/health` address a few minutes before a demonstration.
 - The free instance has 512 MB of memory. The API measured about 196 MB in use after loading both models and answering 200 requests.
+- `GET /health` returns `{"status": "ok", "model_loaded": false}` until the first valid forecast has been made. The two models are read from disk at that point, not when the service starts, and after that `/health` returns `"model_loaded": true`. It goes back to `false` after the service has slept and woken up. `false` is normal and is not a fault.
+- A request that fails the input check (for example an Hb of 25) is refused with a 422 error before any model code runs, so it does not load the models.
+- Each new commit on the branch starts a new build. While it builds, the address can be slow or unavailable, so do not change the branch just before a demonstration.
 
-### Checks after it is hosted
+### Checks on the live copy
 
-1. `GET /health` returns `{"status": "ok", ...}`.
-2. `POST /forecast` with the sample request from the README returns the same numbers as the local service (forecast 10.56, estimated error 0.492, kept).
-3. A request with Hb of 25 returns a 422 error.
-4. Add the hosted address to the README.
+Run by hand on 18 October 2026 against https://tanzania-hb-forecast-demo.onrender.com, in a browser and in the Swagger page. At the time, the live copy was built from commit `807acd6`.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | `GET /health` returns `"status": "ok"` | Passed. It showed `"model_loaded": false` before the first forecast, as designed |
+| 2 | `POST /forecast` with the sample request in the README returns the same numbers as the local service | Passed. Status 200, forecast 10.56, estimated error 0.492, kept, cutoff 0.915 |
+| 3 | A request with Hb of 25 returns a 422 error | Passed. The message was "Input should be less than or equal to 20" |
+| 4 | `GET /health` after the first forecast | Passed. It showed `"model_loaded": true` |
+| 5 | The hosted address is in the README | Done |
 
 ### Using the hosted demo
 
 Use made-up values only. The app does not store or print what it receives, and the demo is for showing how the system works, not for real women's data.
+
+To try it, open `/docs`, choose `POST /forecast`, click Try it out, paste the sample request from the README and click Execute.
 
 If the hosted demo is slow or unavailable during the defense, the same code and models run locally with `python3 -m uvicorn app.main:app`.
 
@@ -64,6 +74,8 @@ If the hosted demo is slow or unavailable during the defense, the same code and 
 - Test the models on data from another time period or another site before any claim of usefulness.
 
 ## Sources
+
+Read on 18 October 2026.
 
 - Render, [Setting your Python version](https://render.com/docs/python-version)
 - Render, [Blueprint YAML reference](https://render.com/docs/blueprint-spec)
