@@ -2,7 +2,7 @@
 
 These are the eight checks agreed for the demo. Checks 1 to 7 are automated in `tests/test_api.py`. Check 8 is done by building a new environment from the README alone.
 
-The API tests need the saved models. From the repository root, run `python src/run_stage1.py` and `python src/run_stage2.py` first, then `pytest tests/`.
+The API tests use the saved models and the prepared tables, which are in the repository, so `pytest tests/` runs without the raw data file. To regenerate everything from scratch, first download the raw file as described in `data/raw/README.md`, then run `python src/audit.py`, `python src/run_stage1.py` and `python src/run_stage2.py`.
 
 | # | Check | How it is tested |
 |---|---|---|
@@ -13,7 +13,7 @@ The API tests need the saved models. From the repository root, run `python src/r
 | 5 | Leaving out the optional inputs still returns a value | `test_check5_leaving_out_the_optional_inputs_still_gives_a_value` |
 | 6 | Every response includes the disclaimer | `test_check6_every_response_carries_the_disclaimer` (4 different requests) |
 | 7 | The service stores no inputs | `test_check7_the_service_stores_no_inputs`: nothing in the repository is created or changed by a request, the submitted value is not in the logs, and `app/main.py` contains no code that writes files or logs |
-| 8 | A fresh machine can run it using only the README commands | A new virtual environment on a clean copy of the repository, then the README steps in order (`pip install -r requirements.txt`, `python src/audit.py`, `python src/run_stage1.py`, `python src/run_stage2.py`, `pytest tests/`, then the API) |
+| 8 | A fresh machine can run it using only the README commands | A new virtual environment on a clean copy of the repository, then the README steps in order (`pip install -r requirements.txt`, download the raw file and check its checksum, `python src/audit.py`, `python src/run_stage1.py`, `python src/run_stage2.py`, `pytest tests/`, then the API) |
 
 `tests/test_api.py` also checks that `/` and `/health` respond.
 
@@ -24,6 +24,8 @@ Run on 14 October 2026 on a clean copy of the repository, in a new virtual envir
 - Python 3.9.25: all 55 tests passed. The regenerated reports, figures and models were identical to the saved ones. The notebook ran top to bottom without errors and gave the same outputs. The API answered the sample request with forecast 10.56, estimated error 0.492, kept, and refused an Hb of 25 with a 422 error.
 - With the saved models, the 55 tests also passed on Python 3.10, 3.11 and 3.12. Retraining on those versions gave the same results as on 3.9.
 - Not tested: macOS or Windows. The hosted copy on Render was checked separately (next section).
+
+Re-checked on 20 October 2026, after the raw file was taken out of the repository, with the pinned libraries on Python 3.11 and a copy of the raw file whose MD5 matches the Zenodo listing: the audit, Stage 1 and Stage 2 gave the same tables and numbers as before, and the notebook gave the same outputs on Python 3.9. Without the raw file, all 55 tests pass. The details are in `docs/data_provenance.md`, section 7.
 
 ## Hosted copy on Render (checked 18 October 2026)
 

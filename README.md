@@ -25,9 +25,10 @@ This is a research demo, not a medical tool. It does not replace blood testing a
 | Data audit and fixed split (1,884 / 402 / 399 women) | Done |
 | Stage 1: five models compared | Done |
 | Stage 2: out-of-fold errors, error model, four ways of choosing forecasts compared | Done on the 402 development women |
-| Locked test on the 399 reserved women | **Not run yet.** It runs once, after the protocol in `docs/frozen_protocol.md` is frozen |
+| Locked test on the 399 reserved women | **Not run yet.** It runs once, after the supervisor has reviewed the protocol in `docs/frozen_protocol.md` and the protocol is frozen |
 | Demo API with the Stage 2 output, tested against 8 acceptance checks | Done, runs locally |
 | Hosting the demo on Render | Done. Live at https://tanzania-hb-forecast-demo.onrender.com/docs and checked on 18 October 2026, see `deployment_plan.md` |
+| Data provenance, and the response to the supervisor's comments | Written: `docs/data_provenance.md` and `docs/response_table.md` |
 
 ## Data
 
@@ -35,17 +36,17 @@ This is a research demo, not a medical tool. It does not replace blood testing a
 
 The data are from *Dataset for Maternal Health Risks Stratification (MHRS) in Tanzania*, Version 1, published on Zenodo on 30 April 2025 ([DOI 10.5281/zenodo.15309733](https://zenodo.org/records/15309733)). Licence: [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Creators as listed on the record: Rukia Mwifunyi, Nyaura Kibinda, Noe Elisa, Florence Upendo Rashidi, Kilavo Hassan, Mustafa Mohsini, Theresia Masoi, Lilian Mnabwiru, Yahaya Hussein and Saturini Manangwa. The University of Dodoma hosts the record, and the Wellcome Trust and the Lacuna Fund are listed as funders. The record describes 8,817 women attending maternity primary health facilities in five districts of Tanzania (Chamwino, Mkuranga, Meatu, Mbulu and Kilolo), with data collection from 20 May 2024 to 30 March 2025.
 
-This project uses Version 1 only (a newer version of the record exists): file `maternal_dataset_csv.csv`, MD5 `0253d2d385dd80d6c9bb82df6b85fcc8`. The copy in `data/raw/` is that file, unmodified, so that everything can be rerun. Everything derived from it was made by the code in this repository.
+This project uses Version 1 only (a newer version of the record exists): file `maternal_dataset_csv.csv`, MD5 `0253d2d385dd80d6c9bb82df6b85fcc8`. The raw file is not stored in this repository. To rerun the audit, Stage 1 or the notebook, download it from the Zenodo record, check the checksum and save it as `data/raw/maternal_dataset_csv.csv`. The link, both checksums and the steps are in `data/raw/README.md` and `docs/data_provenance.md`. The prepared files, the split manifest and the saved models are in the repository, so the tests and the demo API run without the raw file. Everything derived from the raw file was made by the code in this repository.
 
 ### Ethics and data handling
 
-This is a secondary analysis of an existing open dataset. No new data were collected and no participants were contacted. I could not find an ethics approval, a consent procedure or a de-identification method on the Zenodo record page, and this project does not claim any for the data. The file has no name, phone, address, facility or district columns, and its `SN` column is only a row number, so it holds no patient ID. It does contain sensitive clinical columns (for example HIV test results and intimate partner violence) that this project does not use. Only the ten first-visit inputs and the next-visit haemoglobin are used. The demonstration API is for made-up values only and stores nothing.
+This is a secondary analysis of an existing open dataset. No new data were collected and no participants were contacted. I could not find an ethics approval, a consent procedure or a de-identification method on the Zenodo record page or in the record's `metadata.pdf` (a data dictionary of 36 features), and this project does not claim any for the data. The file has no name, phone, address, facility or district columns, and its `SN` column is only a row number, so it holds no patient ID. It does contain sensitive clinical columns (for example HIV test results and intimate partner violence), calendar dates (for example the last menstrual period) and a few free-text clinical note fields. This project uses none of them. The file also includes girls aged 16 or under: 315 of its 8,817 rows, and 63 of the 2,685 rows used. Only 12 of the file's 683 columns are loaded (`RAW_COLUMNS` in `src/data_adapter.py`): the ten first-visit inputs, the next-visit haemoglobin, the gestational week of that visit (used only to check that it comes after the first) and the file's row number. The dataset's own risk label is not read. The demonstration API is for made-up values only and stores nothing. What the record and `metadata.pdf` do not say, and the ethics review status, are in section 5 of `docs/data_provenance.md`.
 
 ### Cohort and split
 
 After cleaning and keeping only women with two recorded visits, 2,685 women are used. They are split into 1,884 for training, 402 for development and 399 reserved for a final test that has not been used yet. Women with an identical set of first-visit values are kept in the same group, though without a patient ID this cannot prove the groups are independent.
 
-`src/audit.py` reproduces the 2,685 count, every exclusion step, the missing values and the split sizes from the raw file, and checks the file's checksum.
+`src/audit.py` reproduces the 2,685 count, every exclusion step, the missing values and the split sizes from the raw file (fetched as described above), and checks the file's checksum.
 
 ## How Stage 2 works
 
@@ -105,7 +106,7 @@ What this shows:
 | 10 to below 11 g/dL | 108 | 107 (99%) | 108 (100%) |
 | 11 g/dL and above | 226 | 184 (81%) | 177 (78%) |
 
-Both methods set aside more than half of the women whose first Hb is below 10. This is the fairness question of the study, and it is reported before the locked test. Women with incomplete inputs are not set aside more often (78% of them kept by the learned score, against 81% of women with complete inputs). The simple rule keeps only 8% of women with incomplete inputs, because that is what it is built to do.
+Both methods set aside far more of the women whose first Hb is below 10 than of other women. The learned score sets aside 54% of them (37 of 68) and tree disagreement sets aside 46% (31 of 68). Among women at 10 to below 11 the figures are 1% and 0%, and at 11 and above they are 19% and 22%. This is the fairness question of the study, and it is reported before the locked test. There is no clear sign that women with incomplete inputs are set aside more often: the learned score keeps 78.2% of them and 80.6% of women with complete inputs, and tree disagreement keeps 80.5% and 80.0%. The simple rule keeps only 8% of women with incomplete inputs, because that is what it is built to do.
 
 The full tables, figures and every paired comparison are in `reports/stage2_dev_results.md`.
 
@@ -115,14 +116,15 @@ Use Python 3.9 to 3.12. The libraries in `requirements.txt` are pinned to exact 
 
 1. Make a virtual environment and install the libraries:
    `python3 -m venv venv`, then `source venv/bin/activate` (on Windows `venv\Scripts\activate`), then `pip install -r requirements.txt`
-2. `python src/audit.py` checks the data and reproduces the counts
-3. `python src/run_stage1.py` compares the five models, saves the chosen one and the fixed fold assignments
-4. `python src/run_stage2.py` builds the out-of-fold errors, trains Stage 2, compares the ways of choosing forecasts on the development women and saves the Stage 2 model, tables and figures in `reports/`
-5. `pytest tests/` runs the tests, including the acceptance checks for the API (see `docs/acceptance_checks.md`)
-6. To try the demo API: `python3 -m uvicorn app.main:app --reload`, then open `http://127.0.0.1:8000/docs`
-7. To open the notebook: `pip install -r requirements-notebook.txt`, then open `notebooks/model_notebook.ipynb`
+2. Download the raw file from Zenodo and save it as `data/raw/maternal_dataset_csv.csv`. `data/raw/README.md` has the link and the checksum to check. Only steps 3, 4 and 8 need this file
+3. `python src/audit.py` checks the file and reproduces the counts
+4. `python src/run_stage1.py` compares the five models, saves the chosen one and the fixed fold assignments
+5. `python src/run_stage2.py` builds the out-of-fold errors, trains Stage 2, compares the ways of choosing forecasts on the development women and saves the Stage 2 model, tables and figures in `reports/`
+6. `pytest tests/` runs the tests, including the acceptance checks for the API (see `docs/acceptance_checks.md`). It does not need the raw file
+7. To try the demo API: `python3 -m uvicorn app.main:app --reload`, then open `http://127.0.0.1:8000/docs`
+8. To open the notebook: `pip install -r requirements-notebook.txt`, then open `notebooks/model_notebook.ipynb`
 
-The locked test is not part of the normal steps. After the supervisor has seen `docs/frozen_protocol.md`, `python src/freeze_protocol.py` records the protocol, code, data and models, and `python src/run_locked_test.py` runs the 399 reserved women once. It refuses to run if anything changed after the freeze, if the libraries are not the ones used at the freeze, and it refuses to run a second time. Steps 3 and 4 must not be rerun after the freeze.
+The locked test is not part of the normal steps. After the supervisor has reviewed `docs/frozen_protocol.md`, `python src/freeze_protocol.py` records the protocol, code, data and models, and `python src/run_locked_test.py` runs the 399 reserved women once. It refuses to run if anything changed after the freeze, if the libraries are not the ones used at the freeze, and it refuses to run a second time. Steps 4 and 5 must not be rerun after the freeze.
 
 ## The demo API
 
@@ -194,7 +196,7 @@ The demo API (`app/main.py`) is hosted on Render's free plan at https://tanzania
 - `tests/`: unit tests and the API acceptance checks
 - `models/`: the saved Stage 1 and Stage 2 models
 - `reports/`: the audit report, Stage 1 and Stage 2 results, tables and figures
-- `docs/`: the protocol for the locked test, the acceptance checks and the current interface screenshot
-- `data/`: the raw file, the prepared files, the split manifest and the fold assignments
+- `docs/`: the protocol for the locked test, the data provenance, the response to the supervisor's comments, the acceptance checks and the current interface screenshot
+- `data/`: the prepared files, the split manifest and the fold assignments. `data/raw/` holds only a note on how to fetch the raw file
 - `deployment_plan.md`, `render.yaml`: how the demo is hosted on Render, and the Render settings
 - Cross-validation folds come from a fixed rule in `src/pipeline.py`, not from scikit-learn's `GroupKFold`, whose tie-breaking changed between versions and shifted the results slightly.

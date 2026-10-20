@@ -11,9 +11,10 @@ Whether a learned second-stage score picks out reliable haemoglobin forecasts be
 
 ## 2. Data and partitions
 
-- Pinned release: Zenodo 10.5281/zenodo.15309733, Version 1, file `maternal_dataset_csv.csv`, MD5 `0253d2d385dd80d6c9bb82df6b85fcc8`.
+- Pinned release: Zenodo 10.5281/zenodo.15309733, Version 1, file `maternal_dataset_csv.csv`, MD5 `0253d2d385dd80d6c9bb82df6b85fcc8`. The file is not stored in the repository. Retrieval, both checksums and the 12 of 683 columns that are loaded are in `docs/data_provenance.md`.
 - 2,685 eligible women: 1,884 training, 402 development, 399 locked test. Seed 42. Women with an identical ten-input vector stay in one partition. `split_manifest.csv` lists the partition of every woman.
 - The locked test is opened once, by `src/run_locked_test.py`, after this protocol is frozen. Results are kept whatever they are. Seeds are not changed because a result is disappointing.
+- Before the split, cohort-level descriptives were computed on all 2,685 eligible women, so they include the 399: the exclusion counts, the missing values, the median first haemoglobin, the follow-up gap, and a chart of first against second haemoglobin (`notebooks/model_notebook.ipynb`). No model was fitted, tuned, compared or evaluated on the 399, and no model has made a forecast for them. `src/run_stage2.py` never opens `test.csv`, and a test checks that.
 
 ## 3. Stage 1 (frozen)
 
@@ -50,6 +51,7 @@ A lower score means a more reliable forecast.
 - Who is kept at 80% coverage, by first haemoglobin (below 10, 10 to below 11, 11 and above), complete versus incomplete inputs, follow-up gap (up to 2, 3 to 4, 5 to 8, over 8 weeks; *proposed* bands) and observed follow-up haemoglobin. Descriptive only. These groups are never used to choose forecasts.
 - Complete-case sensitivity: the whole pipeline repeated on women with all ten inputs.
 - Stage 1: all five candidates on the test women, and the forest against each simpler model with a paired bootstrap.
+- Nothing is refitted after the development comparison. The locked test loads the saved Stage 1 and Stage 2 models. Two refits happen, both on the training women only and with the same fixed settings: the complete-case sensitivity analysis above, which is first checked against the saved development result, and the five Stage 1 candidates, whose forest is first checked against the frozen forest.
 
 ## 8. Demonstration cutoff
 

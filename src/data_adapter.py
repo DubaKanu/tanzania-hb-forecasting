@@ -12,6 +12,18 @@ audit rule is defined in exactly one place.
 import pandas as pd
 import numpy as np
 
+# The only 12 of the file's 683 columns this project uses. They are the only ones loaded
+# (read_csv usecols below), so the other columns never enter the analysis. That includes the
+# sensitive clinical results (HIV, syphilis, malaria), the free-text fields, the calendar
+# dates and the dataset's own risk label. If a name here is missing from the file, pandas
+# stops with an error instead of silently reading something else.
+RAW_COLUMNS = [
+    "SN",
+    "hemoglobin_check_result_v1", "pregnant_week_number_v1", "age", "no_pregnancy",
+    "height_cm", "weight_kg_v1", "pulse_rate_v1", "respiratory_rate_v1", "blood_pressure_v1",
+    "hemoglobin_check_result_v2", "pregnant_week_number_v2",
+]
+
 
 def _clean_numeric(series: pd.Series) -> pd.Series:
     """Convert a string column with 'not_checked' / blank sentinels to float."""
@@ -31,7 +43,7 @@ def _split_bp(series: pd.Series):
 
 
 def load_and_map(raw_path: str) -> pd.DataFrame:
-    raw = pd.read_csv(raw_path, low_memory=False)
+    raw = pd.read_csv(raw_path, usecols=RAW_COLUMNS, low_memory=False)
 
     sys1, dia1 = _split_bp(raw["blood_pressure_v1"])
 
@@ -51,8 +63,7 @@ def load_and_map(raw_path: str) -> pd.DataFrame:
         "gestation_visit2_weeks": pd.to_numeric(raw["pregnant_week_number_v2"], errors="coerce"),
     })
 
-    # keep original row id and the (unused-as-a-feature) original classification
-    # label for reference/reporting only -- never fed to the models.
+    # Keep the file's own row number (its SN column) so that every table can be traced
+    # back to a row. Nothing else is carried: the dataset's own risk label is not read.
     out["_source_row"] = raw["SN"]
-    out["_original_risk_label"] = raw["Risk"]
     return out
