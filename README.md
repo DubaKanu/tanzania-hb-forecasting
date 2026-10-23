@@ -7,7 +7,7 @@ Supervisor: Emmanuel Adjei
 |---|---|
 | GitHub repo | https://github.com/DubaKanu/tanzania-hb-forecasting |
 | Technical report (PDF, 5 pages) | [docs/technical_report.pdf](docs/technical_report.pdf) |
-| Walkthrough video of the final version |
+| Walkthrough video of the final version | https://drive.google.com/file/d/1S6tlDqSnK_Lf-nKyBQ6Yvm1id8FRkh1P/view?usp=sharing
 | First demonstration video (Stage 1 only) | https://drive.google.com/file/d/1hme7EPQWwJKcGfEDZ_sLhvhIecOXRt67/view?usp=sharing |
 | Live demo of the API | https://tanzania-hb-forecast-demo.onrender.com/docs (made-up values only; it runs on a free plan, so the first request after a quiet period can take about a minute) |
 
