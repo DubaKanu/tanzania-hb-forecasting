@@ -1,0 +1,15 @@
+# Style and bug checks for src/, app/, scripts/ and tests/. Run from the repository root:  ruff check .
+line-length = 120
+target-version = "py39"
+extend-exclude = ["notebooks", "data", "models", "reports"]
+
+[lint]
+# E/W: pycodestyle, F: pyflakes (undefined names, unused imports), B: likely bugs, C90: complexity
+select = ["E", "F", "W", "B", "C90"]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.flake8-bugbear]
+# FastAPI's Depends() in a default argument is the framework's normal idiom
+extend-immutable-calls = ["fastapi.Depends"]

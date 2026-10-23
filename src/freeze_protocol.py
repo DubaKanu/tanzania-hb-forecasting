@@ -16,12 +16,10 @@ import datetime
 import hashlib
 import json
 import os
-import platform
 import sys
 
-import numpy as np
-import pandas as pd
-import sklearn
+sys.path.insert(0, os.path.dirname(__file__))
+from provenance import library_versions  # noqa: E402
 
 DATA = "data/Josephine_African_Data_Review/Tanzania_Followup_Haemoglobin"
 FREEZE_PATH = "reports/protocol_freeze.json"
@@ -30,7 +28,14 @@ LOCKED_RESULTS_PATH = "reports/locked_test_results.json"
 FROZEN_FILES = [
     "docs/frozen_protocol.md",
     "src/pipeline.py",
+    "src/metrics.py",
+    "src/provenance.py",
+    "src/stage1.py",
     "src/stage2.py",
+    "src/forecaster.py",
+    "src/selection.py",
+    "src/evaluation.py",
+    "src/reporting.py",
     "src/data_adapter.py",
     "src/run_stage1.py",
     "src/run_stage2.py",
@@ -51,6 +56,7 @@ FROZEN_FILES = [
 
 
 def sha256_of(path: str) -> str:
+    """SHA-256 of a file, read as bytes only."""
     h = hashlib.sha256()
     with open(path, "rb") as f:  # bytes only: hashing does not evaluate the test women
         for chunk in iter(lambda: f.read(1 << 20), b""):
@@ -70,7 +76,8 @@ def verify_freeze(record: dict, root: str = ".") -> list:
     return problems
 
 
-def main():
+def refuse_if_not_allowed():
+    """Stop if the locked test has run, if the protocol is already frozen, or if a file to hash is missing."""
     if os.path.exists(LOCKED_RESULTS_PATH):
         sys.exit("The locked test has already been run. Nothing can be frozen after it.")
     if os.path.exists(FREEZE_PATH):
@@ -83,23 +90,34 @@ def main():
         sys.exit("These files are missing: " + ", ".join(missing) +
                  "\nRun python src/run_stage1.py and python src/run_stage2.py first.")
 
-    # The Stage 2 pieces must all belong to the same run.
+
+def run_id_of_the_saved_stage2_run() -> str:
+    """The Stage 2 pieces must all belong to the same run."""
     with open("reports/oof_run.json") as f:
         oof_run = json.load(f)
     with open("reports/stage2_dev_results.json") as f:
         dev_run = json.load(f)
     if oof_run["run_id"] != dev_run["run_id"]:
         sys.exit("oof_run.json and stage2_dev_results.json come from different runs. Rerun run_stage2.py.")
+    return oof_run["run_id"]
 
-    record = {
+
+def build_record(run_id: str) -> dict:
+    """The freeze record: the time, the Stage 2 run ID and the hash of every file the locked test depends on."""
+    return {
         "frozen_at_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-        "run_id": oof_run["run_id"],
+        "run_id": run_id,
         "note": ("Hashes of everything the locked test depends on. run_locked_test.py refuses to run if "
                  "any of these files has changed."),
-        "versions": {"python": platform.python_version(), "pandas": pd.__version__,
-                     "numpy": np.__version__, "scikit-learn": sklearn.__version__},
+        "versions": library_versions(),
         "files": {p: {"sha256": sha256_of(p), "bytes": os.path.getsize(p)} for p in FROZEN_FILES},
     }
+
+
+def main():
+    """Stop unless every precondition holds, then write the freeze record."""
+    refuse_if_not_allowed()
+    record = build_record(run_id_of_the_saved_stage2_run())
     os.makedirs("reports", exist_ok=True)
     with open(FREEZE_PATH, "w") as f:
         json.dump(record, f, indent=2)

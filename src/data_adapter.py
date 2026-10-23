@@ -43,6 +43,7 @@ def _split_bp(series: pd.Series):
 
 
 def load_and_map(raw_path: str) -> pd.DataFrame:
+    """Read the 12 columns the project needs and return one row per woman with the model's column names."""
     raw = pd.read_csv(raw_path, usecols=RAW_COLUMNS, low_memory=False)
 
     sys1, dia1 = _split_bp(raw["blood_pressure_v1"])

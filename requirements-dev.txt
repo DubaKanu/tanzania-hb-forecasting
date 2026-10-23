@@ -1,0 +1,4 @@
+# Tools for checking the code (not needed to run the project). Install with:  pip install -r requirements-dev.txt
+-r requirements.txt
+ruff==0.17.2
+radon==6.0.1

@@ -1,5 +1,5 @@
 """
-Acceptance checks for the demonstration API (app/main.py).
+Acceptance checks for the demonstration API (app/main.py, app/schemas.py, app/service.py).
 
 Each test is one of the eight checks agreed for the researcher demonstration. They need the
 saved models, so run these first from the repository root:
@@ -9,17 +9,12 @@ saved models, so run these first from the repository root:
 """
 import logging
 import os
-import sys
 
-import joblib
 import numpy as np
 import pandas as pd
 import pytest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "src"))
-
 MODELS = [os.path.join(ROOT, "models", "stage1_model.joblib"),
           os.path.join(ROOT, "models", "stage2_model.joblib")]
 pytestmark = pytest.mark.skipif(
@@ -30,8 +25,8 @@ pytestmark = pytest.mark.skipif(
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
+from forecaster import TwoStageForecaster  # noqa: E402
 from pipeline import FEATURE_COLUMNS  # noqa: E402
-from stage2 import forecast_with_reliability  # noqa: E402
 
 client = TestClient(app)
 
@@ -81,12 +76,12 @@ def test_check3_the_same_input_always_gives_the_same_output():
 
 
 def test_check4_output_equals_the_offline_prediction_for_the_same_row():
-    bundle1, bundle2 = joblib.load(MODELS[0]), joblib.load(MODELS[1])
+    forecaster = TwoStageForecaster.from_files(*MODELS)
     row = pd.DataFrame([SAMPLE])[FEATURE_COLUMNS].astype(float)
-    forecast, _, estimate = forecast_with_reliability(bundle1, bundle2["model"], row)
+    batch = forecaster.forecast(row)
     body = client.post("/forecast", json=SAMPLE).json()
-    assert abs(body["predicted_hb_visit2_g_dl"] - float(forecast[0])) <= 0.0051
-    assert abs(body["estimated_abs_error_g_dl"] - float(estimate[0])) <= 0.0006
+    assert abs(body["predicted_hb_visit2_g_dl"] - float(batch.forecast[0])) <= 0.0051
+    assert abs(body["estimated_abs_error_g_dl"] - float(batch.estimated_abs_error[0])) <= 0.0006
 
 
 def test_check4_output_matches_the_saved_development_results_for_real_women():
@@ -140,10 +135,14 @@ def test_check7_the_service_stores_no_inputs(caplog):
     assert r.status_code == 200
     assert _snapshot(ROOT) == before               # nothing was written anywhere in the repository
     assert str(odd_value) not in caplog.text       # and the input was not logged
-    with open(os.path.join(ROOT, "app", "main.py"), encoding="utf8") as f:
-        source = f.read()
-    for writer in ("open(", ".write(", "to_csv", "joblib.dump", "pickle.dump", "sqlite", "logging"):
-        assert writer not in source
+    app_dir = os.path.join(ROOT, "app")
+    for name in sorted(os.listdir(app_dir)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(app_dir, name), encoding="utf8") as f:
+            source = f.read()
+        for writer in ("open(", ".write(", "to_csv", "joblib.dump", "pickle.dump", "sqlite", "logging"):
+            assert writer not in source, f"{name} contains {writer}"
 
 
 def test_health_and_root_respond():
