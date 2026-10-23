@@ -115,7 +115,9 @@ Checked on 20 October 2026 with the pinned libraries (`requirements.txt`) on Pyt
 - `python src/audit.py` reproduces `reports/audit_report.md` exactly.
 - `python src/run_stage1.py` and `python src/run_stage2.py` regenerate the prepared tables, the split manifest, the folds, the out-of-fold table and the development results with the same values. The saved reports differ only in the recorded Python version.
 - `notebooks/model_notebook.ipynb`, run again on Python 3.9, gives the same outputs. Its saved outputs were regenerated so that no table preview shows the risk label.
-- Without the raw file, all 55 tests pass, because the prepared tables and the saved models are in the repository.
+- Without the raw file, all 55 tests passed on that day, because the prepared tables and the saved models are in the repository. The suite has 316 tests since 23 October 2026.
+
+Checked again on 23 October 2026, after the code was reorganised into classes: `python scripts/check_reproducibility.py` copies the repository to a temporary folder, deletes the 19 derived files, rebuilds them from the raw file (audit, Stage 1, Stage 2) and compares them with the committed ones. On Python 3.9.25, the version that built the committed files, all 19 are identical byte for byte. On Python 3.10, 3.11 and 3.12, 14 are identical and 5 differ only in the text that records the Python version. The table is in `docs/performance.md`.
 
 ## 8. Reproduced results and the earlier pilot
 

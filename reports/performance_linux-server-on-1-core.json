@@ -1,0 +1,69 @@
+{
+  "label": "linux-server-on-1-core",
+  "environment": {
+    "python": "3.11.17",
+    "platform": "Linux-6.18.44-fc-v153-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "cpu_count": 2,
+    "numpy": "2.0.2",
+    "scikit-learn": "1.6.1",
+    "httpx": "0.28.1"
+  },
+  "server_core": 0,
+  "api": {
+    "base_url": "local uvicorn",
+    "seconds_until_health_answers": 1.48,
+    "rss_mb_after_start": 172.5,
+    "first_request_ms": 97.6,
+    "rss_mb_after_models_loaded": 178.4,
+    "sequential_warm": {
+      "n": 300,
+      "mean_ms": 11.5,
+      "p50_ms": 10.5,
+      "p95_ms": 16.8,
+      "p99_ms": 18.4,
+      "max_ms": 21.8
+    },
+    "concurrent": [
+      {
+        "clients": 1,
+        "requests": 75,
+        "requests_per_second": 78.3,
+        "n": 75,
+        "mean_ms": 11.7,
+        "p50_ms": 11.4,
+        "p95_ms": 14.8,
+        "p99_ms": 15.3,
+        "max_ms": 18.6
+      },
+      {
+        "clients": 4,
+        "requests": 72,
+        "requests_per_second": 79.6,
+        "n": 72,
+        "mean_ms": 39.9,
+        "p50_ms": 38.3,
+        "p95_ms": 62.2,
+        "p99_ms": 64.2,
+        "max_ms": 66.2
+      },
+      {
+        "clients": 16,
+        "requests": 80,
+        "requests_per_second": 53.5,
+        "n": 80,
+        "mean_ms": 113.6,
+        "p50_ms": 113.5,
+        "p95_ms": 179.5,
+        "p99_ms": 183.6,
+        "max_ms": 227.6
+      }
+    ],
+    "rss_mb_after_load_test": 181.1,
+    "offline_batch": {
+      "women": 402,
+      "seconds": 0.016,
+      "women_per_second": 24626.9
+    }
+  }
+}

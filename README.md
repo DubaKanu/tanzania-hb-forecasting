@@ -1,13 +1,15 @@
 # Tanzania Antenatal Haemoglobin Forecasting
 
-Capstone project for my Software Engineering degree at ALU.
+Capstone project for my Software Engineering degree at ALU (machine learning track).
 Supervisor: Emmanuel Adjei
 
-GitHub repo: https://github.com/DubaKanu/tanzania-hb-forecasting
-
-Video demo (the initial Stage 1 demonstration): https://drive.google.com/file/d/1hme7EPQWwJKcGfEDZ_sLhvhIecOXRt67/view?usp=sharing
-
-Live demo of the API (made-up values only; it runs on a free plan, so the first request after a quiet period can take about a minute): https://tanzania-hb-forecast-demo.onrender.com/docs
+| | |
+|---|---|
+| GitHub repo | https://github.com/DubaKanu/tanzania-hb-forecasting |
+| Technical report (PDF, 5 pages) | [docs/technical_report.pdf](docs/technical_report.pdf) |
+| Walkthrough video of the final version | PASTE-VIDEO-LINK-HERE |
+| First demonstration video (Stage 1 only) | https://drive.google.com/file/d/1hme7EPQWwJKcGfEDZ_sLhvhIecOXRt67/view?usp=sharing |
+| Live demo of the API | https://tanzania-hb-forecast-demo.onrender.com/docs (made-up values only; it runs on a free plan, so the first request after a quiet period can take about a minute) |
 
 ## What this does
 
@@ -26,9 +28,152 @@ This is a research demo, not a medical tool. It does not replace blood testing a
 | Stage 1: five models compared | Done |
 | Stage 2: out-of-fold errors, error model, four ways of choosing forecasts compared | Done on the 402 development women |
 | Locked test on the 399 reserved women | **Not run yet.** It runs once, after the supervisor has reviewed the protocol in `docs/frozen_protocol.md` and the protocol is frozen |
-| Demo API with the Stage 2 output, tested against 8 acceptance checks | Done, runs locally |
+| Demo API with the Stage 2 output, tested against 8 acceptance checks and 148 input checks | Done |
 | Hosting the demo on Render | Done. Live at https://tanzania-hb-forecast-demo.onrender.com/docs and checked on 18 October 2026, see `deployment_plan.md` |
 | Data provenance, and the response to the supervisor's comments | Written: `docs/data_provenance.md` and `docs/response_table.md` |
+| Final version (this submission) | Code organised into classes, the API hardened and more than six times faster, 316 automated tests, checks on Python 3.9 to 3.12, a technical report. See "Code design", "Testing" and "Performance and compatibility" below |
+
+## Technical requirements
+
+**Software.** The exact versions are pinned in `requirements.txt`.
+
+| What | Version | Used for |
+|---|---|---|
+| Python | 3.9 to 3.12. Tested on 3.9.25, 3.10.20, 3.11.17 and 3.12.13. The hosted demo runs 3.11.9. Python 3.13 is not supported with the pinned libraries | everything |
+| numpy, pandas, scipy | 2.0.2, 2.3.3, 1.13.1 | data and numerics |
+| scikit-learn, joblib | 1.6.1, 1.4.2 | the models, and saving them |
+| matplotlib | 3.9.4 | figures |
+| FastAPI, uvicorn, pydantic | 0.115.6, 0.34.0, 2.10.4 | the demo API |
+| httpx, pytest | 0.28.1, 8.3.4 | API tests, the speed test, the test suite |
+| ruff, radon | 0.17.2, 6.0.1 (`requirements-dev.txt`) | style and complexity checks |
+| jupyterlab, ipykernel, nbconvert | see `requirements-notebook.txt` | only to open the notebook |
+
+No other SDK, database, GPU or compiler is needed. Every library installs from a ready-made build on Python 3.9 to 3.12. There is no executable or APK: the product is a Python service started with `python -m uvicorn app.main:app` (see "Installation and use"), and the hosted copy runs the same code.
+
+**Operating system.** Developed and tested on Linux (Ubuntu 24.04). The hosted demo runs on Render, which is also Linux. The commands below are the same on macOS. On Windows use `venv\Scripts\activate` instead of `source venv/bin/activate` (not tested).
+
+**Hardware.** Any 64-bit computer with 1 GB of free memory is enough. Measured on 2 vCPU (Intel Xeon, 2.80 GHz) with 8 GB of RAM: the API used about 180 MB and one CPU core, answered a forecast in about 11 ms, and rebuilding every result from the raw file took about 30 seconds. Render's free plan (512 MB) is enough for the API. Numbers and method: `docs/performance.md`.
+
+## Installation and use
+
+Use Python 3.9 to 3.12. The libraries in `requirements.txt` are pinned to exact versions. With them, Python 3.9, 3.10, 3.11 and 3.12 all gave the same numbers as below when checked on Linux. Other library versions can move some numbers by about 0.003 g/dL.
+
+1. Get the code and install the libraries:
+
+   ```
+   git clone -b post-feedback-revision https://github.com/DubaKanu/tanzania-hb-forecasting.git
+   cd tanzania-hb-forecasting
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+   On Windows, activate with `venv\Scripts\activate`.
+2. Check the install with `python -m pytest tests -q`. All 316 tests should pass in about a minute. This needs neither the raw file nor the internet.
+3. Try the demo API with `python -m uvicorn app.main:app --reload`, then open `http://127.0.0.1:8000/docs`.
+4. To rebuild the results from the raw file, download it from Zenodo and save it as `data/raw/maternal_dataset_csv.csv`. `data/raw/README.md` has the link and the checksum to check. Then run:
+   - `python src/audit.py` checks the file and reproduces the counts
+   - `python src/run_stage1.py` compares the five models, saves the chosen one and the fixed fold assignments
+   - `python src/run_stage2.py` builds the out-of-fold errors, trains Stage 2, compares the ways of choosing forecasts on the development women and saves the Stage 2 model, tables and figures in `reports/`
+   - `python scripts/check_reproducibility.py` runs those three in a temporary copy and compares the 19 files they make with the ones in the repository. Nothing in the repository changes
+5. To measure the speed of the API, run `python scripts/benchmark_api.py --start-local --label my-machine`.
+6. To run the code checks, `pip install -r requirements-dev.txt` and then `ruff check .`.
+7. To open the notebook, `pip install -r requirements-notebook.txt` and open `notebooks/model_notebook.ipynb`.
+
+The locked test is not part of the normal steps. After the supervisor has reviewed `docs/frozen_protocol.md`, `python src/freeze_protocol.py` records the protocol, code, data and models, and `python src/run_locked_test.py` runs the 399 reserved women once. It refuses to run if anything changed after the freeze, if the libraries are not the ones used at the freeze, and it refuses to run a second time. `run_stage1.py` and `run_stage2.py` must not be rerun after the freeze.
+
+## Repository structure
+
+```
+.
+├── README.md
+├── requirements.txt            pinned libraries for the code, the API and the tests
+├── requirements-dev.txt        the same, plus ruff and radon for the code checks
+├── requirements-notebook.txt   extra libraries for the notebook
+├── ruff.toml                   style, bug and complexity rules (maximum complexity 10)
+├── render.yaml                 settings for the hosted demo on Render
+├── deployment_plan.md          how the demo is hosted, and what is out of scope
+├── .github/workflows/          tests on Python 3.9 to 3.12 and the style check, on every upload
+├── src/                        the modelling code. Modules define classes and functions only; five thin scripts run them
+│   ├── data_adapter.py         the only reader of the raw file (12 of its 683 columns)
+│   ├── pipeline.py             eligibility rules, identical-record groups, fixed split, cross-validation fold rule
+│   ├── metrics.py              error measures, exact-coverage ranking, paired bootstrap
+│   ├── stage1.py               Stage1Model and its five implementations, cross-validation, tree predictions
+│   ├── stage2.py               Stage2ErrorEstimator and the out-of-fold table
+│   ├── forecaster.py           TwoStageForecaster: the one path used by evaluation, the locked test and the API
+│   ├── selection.py            Selector and its implementations (learned, tree disagreement, simple rule, oracle, random)
+│   ├── evaluation.py           coverage tables, bootstrap comparisons, who-is-set-aside audit
+│   ├── reporting.py            tables, figures and the results files
+│   ├── provenance.py           checksums and library versions
+│   ├── audit.py                step 1: reproduce the counts from the raw file
+│   ├── run_stage1.py           step 2: compare the five Stage 1 models
+│   ├── run_stage2.py           step 3: Stage 2 and the comparison on the development women
+│   └── freeze_protocol.py, run_locked_test.py    the locked test (not run yet)
+├── app/                        the API: main.py (routes), schemas.py (inputs and limits), service.py, errors.py
+├── tests/                      316 tests in 16 files, plus conftest.py and helpers.py
+├── scripts/                    benchmark_api.py, check_reproducibility.py, make_class_diagram.py
+├── models/                     the saved Stage 1 and Stage 2 models
+├── reports/                    audit, Stage 1 and Stage 2 results, tables, figures, speed measurements
+├── docs/                       technical report, data dictionary, performance, protocol for the locked test, data provenance,
+│                               response to the supervisor's comments, acceptance checks, class diagram
+├── data/                       prepared files, split manifest, fold assignments. data/raw/ holds only a note on how to fetch the raw file
+└── notebooks/                  model_notebook.ipynb with the charts and results
+```
+
+Cross-validation folds come from a fixed rule in `src/pipeline.py`, not from scikit-learn's `GroupKFold`, whose tie-breaking changed between versions and shifted the results slightly. Column names, ranges and missing values of every prepared file are in `docs/data_dictionary.md`.
+
+Branches: the final version is on `post-feedback-revision`. The first demonstration is the release tag `initial-demo-submitted`.
+
+## Code design
+
+The classes follow the class design in the proposal (Figure 4) and my supervisor's comments on it. The figure is drawn from the code by `scripts/make_class_diagram.py`.
+
+![Class diagram](docs/figures/class_diagram.png)
+
+| Class | Job | Design idea |
+|---|---|---|
+| `Stage1Model` (abstract) and five subclasses | forecast Hb at the next recorded visit | Inheritance and polymorphism. Cross-validation, saving and evaluation treat the five models the same way, and a sixth model is one new subclass |
+| `Stage2ErrorEstimator` | learn how large each forecast's error is likely to be | Composition. It owns its random forest |
+| `TwoStageForecaster` | forecast and estimated error for any table of women | The single path used by the evaluation, the locked test and the API, so the API returns what the offline code returns, by construction |
+| `Selector` (abstract), `ScoreSelector` and five subclasses | the ways of choosing which forecasts to keep | Open for extension. A new way of choosing is one new subclass and `evaluate_partition` does not change |
+| `ForecastService` | the API's job: validated inputs in, forecast out | Dependency inversion. It is given a loader function, so tests use fakes and FastAPI injects it with `Depends` |
+
+Other choices: every script is a short list of steps, each step a function, and nothing runs when a module is imported. The longest function in `src/` is 32 lines. The saved models are plain scikit-learn objects in dictionaries, so the files in `models/` load without any class from this code. `ruff check .` checks style, likely bugs and complexity (limit 10), and the 243 classes, functions and methods in `src/`, `app/` and `scripts/` average a cyclomatic complexity of 2.2 (grade A on radon's scale), with 15 at grade B and none worse (the highest is 10).
+
+## Testing
+
+`python -m pytest tests -q` runs 316 tests in about a minute. They need no raw file and no internet.
+
+| Layer | Tests | What they check |
+|---|---|---|
+| Modelling code (`test_pipeline`, `test_metrics`, `test_stage1_models`, `test_stage2`, `test_selection`, `test_evaluation`, `test_forecaster`, `test_data_adapter`, `test_provenance_audit`) | 101 | the fold rule, exact coverage, the bootstrap, the five models, out-of-fold forecasts that never saw the woman, the selectors, saving and loading, the audit. Synthetic cohorts only, never reported as results |
+| Reproducibility check (`test_reproducibility_check`) | 11 | how a rebuilt file is judged the same as the committed one |
+| Locked-test guards (`test_locked_test_guards`) | 11 | the locked test refuses to run without a freeze, after a change or twice, and development scripts never read `test.csv` |
+| API and service (`test_api`, `test_api_inputs`, `test_api_errors`, `test_service`) | 190 | the 8 acceptance checks, every input limit and just outside it, NaN, infinity, huge numbers, wrong types, missing optional values, malformed requests, a missing model file, models loaded once |
+| Speed (`test_performance`) | 3 | the models are read once, a request takes under 0.1 s (median), 402 women take under 2 s |
+
+Outside pytest:
+
+- `python scripts/check_reproducibility.py` rebuilds the 19 derived files from the raw file and compares them with the repository. After the code was reorganised into classes it found no changed number. On Python 3.9.25, the version that built the committed files, all 19 are identical byte for byte. On Python 3.10, 3.11 and 3.12, 14 are identical and 5 differ only in the Python version saved inside them.
+- Input testing found a real defect: NaN, Infinity or a huge number in eight of the inputs gave HTTP 500 and not a 422 (the first submitted version did the same, checked by running it). Every input now has limits, NaN and Infinity are refused, and the error message never repeats the value sent.
+- `scripts/benchmark_api.py` and a profile found that scikit-learn's repeated input checks used most of the time of a request. The fix gives the same numbers to the last digit and makes a request more than six times faster (median 73.5 ms to 11.1 ms).
+- A GitHub Actions workflow runs the tests on Python 3.9, 3.10, 3.11 and 3.12 and `ruff check .` on every upload.
+
+The acceptance checks are in `docs/acceptance_checks.md`, and the measurements in `docs/performance.md`.
+
+## Performance and compatibility
+
+Measured on 2 vCPU with 8 GB of RAM, Python 3.11.17, one server process (details in `docs/performance.md`):
+
+| | Result |
+|---|---|
+| One forecast request, median and 95th percentile | 11.1 ms and 17.2 ms (73.5 ms and 107.4 ms before the fix) |
+| Requests per second with the server on one core | about 80 |
+| Memory of the server after loading both models | about 180 MB |
+| 402 development women forecast in one call | 0.022 s |
+| Start until `/health` answers | 1.5 s |
+
+Python 3.9, 3.10, 3.11 and 3.12 all pass the tests and rebuild the same results. Python 3.13 cannot install the pinned scipy (no ready-made build), so it is not supported. Linux only has been measured. The speed of the hosted copy on Render's free plan was not measured; the command is in `docs/performance.md`.
 
 ## Data
 
@@ -110,25 +255,9 @@ Both methods set aside far more of the women whose first Hb is below 10 than of 
 
 The full tables, figures and every paired comparison are in `reports/stage2_dev_results.md`.
 
-## How to run it
-
-Use Python 3.9 to 3.12. The libraries in `requirements.txt` are pinned to exact versions. With them, Python 3.9, 3.10, 3.11 and 3.12 all gave the same numbers as above when checked on Linux. Other library versions can move some numbers by about 0.003 g/dL.
-
-1. Make a virtual environment and install the libraries:
-   `python3 -m venv venv`, then `source venv/bin/activate` (on Windows `venv\Scripts\activate`), then `pip install -r requirements.txt`
-2. Download the raw file from Zenodo and save it as `data/raw/maternal_dataset_csv.csv`. `data/raw/README.md` has the link and the checksum to check. Only steps 3, 4 and 8 need this file
-3. `python src/audit.py` checks the file and reproduces the counts
-4. `python src/run_stage1.py` compares the five models, saves the chosen one and the fixed fold assignments
-5. `python src/run_stage2.py` builds the out-of-fold errors, trains Stage 2, compares the ways of choosing forecasts on the development women and saves the Stage 2 model, tables and figures in `reports/`
-6. `pytest tests/` runs the tests, including the acceptance checks for the API (see `docs/acceptance_checks.md`). It does not need the raw file
-7. To try the demo API: `python3 -m uvicorn app.main:app --reload`, then open `http://127.0.0.1:8000/docs`
-8. To open the notebook: `pip install -r requirements-notebook.txt`, then open `notebooks/model_notebook.ipynb`
-
-The locked test is not part of the normal steps. After the supervisor has reviewed `docs/frozen_protocol.md`, `python src/freeze_protocol.py` records the protocol, code, data and models, and `python src/run_locked_test.py` runs the 399 reserved women once. It refuses to run if anything changed after the freeze, if the libraries are not the ones used at the freeze, and it refuses to run a second time. Steps 4 and 5 must not be rerun after the freeze.
-
 ## The demo API
 
-`POST /forecast` takes a woman's first-visit values. Hb, gestational week, age, number of pregnancies, height and weight are required. Pulse, respiratory rate and the two blood pressures are optional and are filled in if missing. Hb must be 3 to 20 g/dL, gestational week 1 to 42, age 10 to 60, height 100 to 200 cm and weight 30 to 150 kg. Anything outside these ranges is refused with a 422 error.
+`POST /forecast` takes a woman's first-visit values. Hb, gestational week, age, number of pregnancies, height and weight are required. Pulse, respiratory rate and the two blood pressures are optional and are filled in if missing (leave them out or send `null`). Every input has limits: Hb 3 to 20 g/dL, gestational week 1 to 42, age 10 to 60, number of pregnancies 0 to 25, height 100 to 200 cm, weight 30 to 150 kg, pulse 20 to 250, breaths per minute 4 to 120, systolic pressure 40 to 300 and diastolic pressure 10 to 200 mmHg. Anything outside the limits, and NaN or Infinity, is refused with a 422 error that does not repeat the value that was sent. The column-by-column description of the inputs and outputs is in `docs/data_dictionary.md`.
 
 Example request (made-up values):
 
@@ -187,16 +316,5 @@ The demo API (`app/main.py`) is hosted on Render's free plan at https://tanzania
 - Only women with a repeat test are included, which selects women who were tested twice.
 - The forests that make the Stage 2 training table are fitted on two thirds of the training women, so Stage 2 later receives forecasts from a slightly stronger forest than the one that produced its examples.
 - The Stage 2 score ranks forecasts. It is not a confidence interval.
-
-## What's in here
-
-- `src/`: data cleaning, Stage 1 and Stage 2 code, and the scripts `audit.py`, `run_stage1.py`, `run_stage2.py`, `freeze_protocol.py` and `run_locked_test.py`
-- `notebooks/`: the main notebook with charts and results
-- `app/`: the API
-- `tests/`: unit tests and the API acceptance checks
-- `models/`: the saved Stage 1 and Stage 2 models
-- `reports/`: the audit report, Stage 1 and Stage 2 results, tables and figures
-- `docs/`: the protocol for the locked test, the data provenance, the response to the supervisor's comments, the acceptance checks and the current interface screenshot
-- `data/`: the prepared files, the split manifest and the fold assignments. `data/raw/` holds only a note on how to fetch the raw file
-- `deployment_plan.md`, `render.yaml`: how the demo is hosted on Render, and the Render settings
-- Cross-validation folds come from a fixed rule in `src/pipeline.py`, not from scikit-learn's `GroupKFold`, whose tie-breaking changed between versions and shifted the results slightly.
+- Speed and compatibility were measured on Linux only. Python 3.13 is not supported with the pinned libraries, and macOS and Windows were not tested by me.
+- All results above are development results. The locked test on the 399 reserved women has not been run.

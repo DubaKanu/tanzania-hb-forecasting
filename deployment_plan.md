@@ -37,7 +37,7 @@ Render's default Python depends on when a service was created. It was 3.14.3 for
 ### What to expect on the free plan
 
 - A free web service spins down after 15 minutes without requests and starts again on the next request. The first request after a quiet period is slow, so open the `/health` address a few minutes before a demonstration.
-- The free instance has 512 MB of memory. The API measured about 196 MB in use after loading both models and answering 200 requests.
+- The free instance has 512 MB of memory. The API measured about 182 MB in use after loading both models and answering about 540 requests (see `docs/performance.md`).
 - `GET /health` returns `{"status": "ok", "model_loaded": false}` until the first valid forecast has been made. The two models are read from disk at that point, not when the service starts, and after that `/health` returns `"model_loaded": true`. It goes back to `false` after the service has slept and woken up. `false` is normal and is not a fault.
 - A request that fails the input check (for example an Hb of 25) is refused with a 422 error before any model code runs, so it does not load the models.
 - Each new commit on the branch starts a new build. While it builds, the address can be slow or unavailable, so do not change the branch just before a demonstration.
