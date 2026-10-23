@@ -1,0 +1,17 @@
+# The raw clinical file is never committed (see data/raw/README.md)
+data/raw/*.csv
+data/raw/*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+venv/
+.venv/
+
+# macOS and editors
+.DS_Store
+.vscode/
+.idea/
